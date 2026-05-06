@@ -54,9 +54,9 @@ export async function Hero() {
           className="mt-8 text-[18.5px] text-zinc-400 leading-[1.55] max-w-[52ch] mx-auto"
           style={{ textWrap: "pretty" }}
         >
-          A lead delegates. Workers ship in Docker.{" "}
-          <span className="text-white">Memory persists across every task</span> so tomorrow&apos;s
-          swarm is sharper than today&apos;s.
+          A lead coordinates all tasks,{" "}
+          <span className="text-white">workers ship in their own containers</span>, memory compounds
+          with every run. Interact as you do with your remote colleagues.
         </p>
 
         <div className="mt-11 flex flex-row gap-2.5 sm:gap-3 justify-center">
@@ -79,12 +79,12 @@ export async function Hero() {
           </a>
         </div>
 
-        <div className="mt-14 flex flex-col items-center gap-3">
+        <div className="mt-9 flex flex-col items-center gap-3">
           <div className="flex flex-wrap items-baseline justify-center gap-x-3">
             <span className="font-mono text-[10.5px] tracking-[0.18em] text-zinc-500 uppercase">
               Models
             </span>
-            <span className="font-mono text-[12px] tracking-[0.04em] text-zinc-300">
+            <span className="font-mono text-[13px] tracking-[0.04em] text-zinc-300">
               <span className="text-white">Claude Code</span> · Codex · Devin
               <span className="hidden sm:inline"> · OpenCode</span> ·{" "}
               <span className="text-zinc-500">+ more</span>
@@ -94,7 +94,7 @@ export async function Hero() {
             <span className="font-mono text-[10.5px] tracking-[0.18em] text-zinc-500 uppercase">
               Lives in
             </span>
-            <span className="font-mono text-[12px] tracking-[0.04em] text-zinc-300">
+            <span className="font-mono text-[13px] tracking-[0.04em] text-zinc-300">
               Slack · GitHub · GitLab
               <span className="hidden sm:inline"> · Linear · Jira · Email · API</span> ·{" "}
               <span className="text-zinc-500">+ more</span>

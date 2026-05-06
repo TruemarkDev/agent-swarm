@@ -2,6 +2,8 @@ const PILLARS = [
   {
     id: "compounds",
     title: "Yesterday’s work makes tomorrow easier",
+    // TODO(DES-318): once memory-recall % telemetry is instrumented, replace
+    // "Most agents start every task from zero" with the concrete percentage.
     body:
       "Most agents start every task from zero. Ours read what they shipped last week before they begin.",
     accent: "oklch(0.879 0.169 91.605)",
@@ -10,7 +12,7 @@ const PILLARS = [
     id: "peer",
     title: "A peer, not a tab",
     body:
-      "No new dashboard to live in. @mention the bot where you already work: Slack, GitHub, Linear, email, you name it.",
+      "@mention a high-agency teammate where you already work — Slack, GitHub, Linear, email. You hand off the goal, they ship the work in parallel while you do other things.",
     accent: "oklch(0.769 0.188 70.08)",
   },
   {
@@ -22,24 +24,10 @@ const PILLARS = [
   },
   {
     id: "no-lockin",
-    title: "No model, no platform lock-in",
+    title: "No lock-in, anywhere",
     body:
-      "BYOK. BYOM. Swap Claude Code for Codex on Tuesday. The memory layer is yours either way.",
+      "BYOK, BYOM, swap Claude Code for Codex on Tuesday. Run the whole stack on your own infra under MIT, or skip the ops on Cloud. The memory layer is yours either way.",
     accent: "oklch(0.473 0.137 46.201)",
-  },
-  {
-    id: "self-hosted",
-    title: "Self-host first, cloud optional",
-    body:
-      "MIT. One docker-compose or a k8s Helm chart. Air-gapped if you need it. The cloud version exists for convenience, never as a hostage.",
-    accent: "oklch(0.555 0.163 48.998)",
-  },
-  {
-    id: "velocity",
-    title: "You stop being the bottleneck",
-    body:
-      "A lead plans, workers run in parallel in isolated containers. The swarm ships while you sleep.",
-    accent: "oklch(0.769 0.188 70.08)",
   },
 ];
 
@@ -77,7 +65,7 @@ export function Pillars() {
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-zinc-100 rounded-2xl overflow-hidden border border-zinc-100">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-zinc-100 rounded-2xl overflow-hidden border border-zinc-100">
           {PILLARS.map((p, i) => (
             <div
               key={p.id}
@@ -92,7 +80,7 @@ export function Pillars() {
               />
               <div className="flex items-center justify-between mb-5">
                 <div className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-zinc-400">
-                  {String(i + 1).padStart(2, "0")} / 06
+                  {String(i + 1).padStart(2, "0")} / 04
                 </div>
                 <div
                   className="w-1.5 h-1.5 rounded-full"

@@ -1,4 +1,5 @@
 import { ArrowRight, Check, Github } from "lucide-react";
+import { PricingCloudCalculator } from "@/components/pricing-cloud-calculator";
 
 type Tier = {
   name: string;
@@ -31,24 +32,6 @@ const TIERS: Tier[] = [
     ctaHref: "https://github.com/desplega-ai/agent-swarm",
   },
   {
-    name: "Cloud",
-    tagline: "Hosted swarm, billed monthly",
-    price: "€9",
-    per: "platform / mo",
-    rider: "plus €29 / mo per worker",
-    features: [
-      "Hosted lead + dashboard",
-      "Workers billed individually — scale up or down anytime",
-      "Slack, GitHub, GitLab, Linear, AgentMail, Sentry",
-      "Bring your own model keys (BYOK)",
-      "7-day free trial · no card required",
-    ],
-    cta: "Start 7-day trial",
-    ctaIcon: "arrow",
-    ctaHref: "https://cloud.agent-swarm.dev",
-    highlight: true,
-  },
-  {
     name: "Enterprise",
     tagline: "Self-host with a pager",
     price: "Talk",
@@ -71,7 +54,44 @@ function TierIcon({ icon }: { icon: Tier["ctaIcon"] }) {
   return <ArrowRight className="w-[14px] h-[14px]" />;
 }
 
+function StaticTierCard({ tier }: { tier: Tier }) {
+  return (
+    <div className="relative rounded-2xl p-7 transition border bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-xl hover:shadow-zinc-200/40 flex flex-col">
+      <div className="text-[13px] font-semibold tracking-tight text-amber-700">{tier.name}</div>
+      <div className="mt-1 text-[12.5px] text-zinc-500">{tier.tagline}</div>
+
+      <div className="mt-5 flex items-baseline gap-1.5">
+        <span className="text-[44px] font-bold tracking-[-0.03em] leading-none text-zinc-950">
+          {tier.price}
+        </span>
+        <span className="text-[13px] text-zinc-500">{tier.per}</span>
+      </div>
+
+      <div className="mt-5 h-px bg-zinc-100" />
+
+      <ul className="mt-5 space-y-2.5 text-[14px] text-zinc-600 flex-1">
+        {tier.features.map((f) => (
+          <li key={f} className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex-shrink-0 text-amber-700">
+              <Check className="w-[15px] h-[15px]" />
+            </span>
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+
+      <a
+        href={tier.ctaHref}
+        className="mt-7 inline-flex w-full justify-center items-center gap-1.5 px-4 h-11 rounded-xl text-[14px] font-semibold transition bg-zinc-950 hover:bg-zinc-800 text-white"
+      >
+        {tier.cta} <TierIcon icon={tier.ctaIcon} />
+      </a>
+    </div>
+  );
+}
+
 export function PricingTiers() {
+  const [selfHosted, enterprise] = TIERS;
   return (
     <section id="pricing" className="py-32 bg-white">
       <div className="max-w-[1180px] mx-auto px-6 sm:px-7">
@@ -92,101 +112,23 @@ export function PricingTiers() {
           <p className="text-[16px] text-zinc-500 leading-[1.6] max-w-md">
             Self-host the whole thing for free, forever. Or skip the ops and run it on Cloud —{" "}
             <span className="text-zinc-800">
-              €9 / month flat for the platform, plus €29 / month per worker you spin up.
+              pick how many workers you need, see the total.
             </span>
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-5 lg:gap-6 items-stretch">
-          {TIERS.map((t) => (
-            <div
-              key={t.name}
-              className={`relative rounded-2xl p-7 transition border flex flex-col ${
-                t.highlight
-                  ? "bg-zinc-950 text-white border-zinc-900"
-                  : "bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-xl hover:shadow-zinc-200/40"
-              }`}
-              style={
-                t.highlight
-                  ? { boxShadow: "0 20px 60px -20px oklch(0.555 0.163 48.998 / 0.5)" }
-                  : undefined
-              }
-            >
-              {t.highlight && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-bold tracking-[0.1em] uppercase">
-                  Most popular
-                </div>
-              )}
-              <div
-                className={`text-[13px] font-semibold tracking-tight ${
-                  t.highlight ? "text-amber-400" : "text-amber-700"
-                }`}
-              >
-                {t.name}
-              </div>
-              <div
-                className={`mt-1 text-[12.5px] ${
-                  t.highlight ? "text-zinc-400" : "text-zinc-500"
-                }`}
-              >
-                {t.tagline}
-              </div>
-
-              <div className="mt-5 flex items-baseline gap-1.5">
-                <span
-                  className={`text-[44px] font-bold tracking-[-0.03em] leading-none ${
-                    t.highlight ? "text-white" : "text-zinc-950"
-                  }`}
-                >
-                  {t.price}
-                </span>
-                <span className={`text-[13px] ${t.highlight ? "text-zinc-400" : "text-zinc-500"}`}>
-                  {t.per}
-                </span>
-              </div>
-              {t.rider && (
-                <div
-                  className={`mt-1.5 font-mono text-[11.5px] tracking-[0.02em] ${
-                    t.highlight ? "text-amber-300" : "text-amber-700"
-                  }`}
-                >
-                  + {t.rider}
-                </div>
-              )}
-
-              <div className={`mt-5 h-px ${t.highlight ? "bg-white/[0.08]" : "bg-zinc-100"}`} />
-
-              <ul
-                className={`mt-5 space-y-2.5 text-[14px] ${
-                  t.highlight ? "text-zinc-300" : "text-zinc-600"
-                } flex-1`}
-              >
-                {t.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5">
-                    <span
-                      className={`mt-0.5 flex-shrink-0 ${
-                        t.highlight ? "text-amber-400" : "text-amber-700"
-                      }`}
-                    >
-                      <Check className="w-[15px] h-[15px]" />
-                    </span>
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <a
-                href={t.ctaHref}
-                className={`mt-7 inline-flex w-full justify-center items-center gap-1.5 px-4 h-11 rounded-xl text-[14px] font-semibold transition ${
-                  t.highlight
-                    ? "bg-amber-500 hover:bg-amber-400 text-zinc-950"
-                    : "bg-zinc-950 hover:bg-zinc-800 text-white"
-                }`}
-              >
-                {t.cta} <TierIcon icon={t.ctaIcon} />
-              </a>
+          <StaticTierCard tier={selfHosted} />
+          <div
+            className="relative rounded-2xl p-7 transition border bg-zinc-950 text-white border-zinc-900"
+            style={{ boxShadow: "0 20px 60px -20px oklch(0.555 0.163 48.998 / 0.5)" }}
+          >
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-bold tracking-[0.1em] uppercase">
+              Most popular
             </div>
-          ))}
+            <PricingCloudCalculator />
+          </div>
+          <StaticTierCard tier={enterprise} />
         </div>
 
         <p className="mt-8 text-center font-mono text-[11.5px] tracking-[0.04em] text-zinc-400">

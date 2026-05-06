@@ -41,41 +41,18 @@ export function SocialProof({ stars }: { stars: number }) {
           <figure className="lg:max-w-md">
             <blockquote className="text-[20px] leading-[1.45] text-zinc-800 tracking-[-0.005em]">
               <span className="text-amber-700 italic text-[28px] leading-none mr-1">“</span>
-              The swarm made me feel like I worked in a team again, and we are just two.
+              Building multi-agent workflows is surprisingly approachable. You don&apos;t code it,
+              you just explain it.
               <span className="text-amber-700 italic text-[28px] leading-none ml-0.5">”</span>
             </blockquote>
-            <figcaption className="mt-5 flex items-center gap-3">
-              <a
-                href="https://desplega.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-9 h-9 rounded-full bg-white border border-zinc-200 flex items-center justify-center overflow-hidden flex-shrink-0"
-                aria-label="desplega.ai — opens in a new tab"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/logos/desplega-iso.svg"
-                  alt="desplega.ai"
-                  className="w-5 h-5 object-contain"
-                />
-              </a>
-              <div className="text-[13px] leading-tight">
-                <div className="font-semibold text-zinc-900">Taras, Co-founder</div>
-                <a
-                  href="https://desplega.ai"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-zinc-500 hover:text-amber-700 transition-colors"
-                >
-                  desplega.ai
-                </a>
-              </div>
+            <figcaption className="mt-5 text-[13px] text-zinc-500 leading-tight">
+              — Engineer Manager
             </figcaption>
           </figure>
 
           <div className="lg:border-l lg:border-zinc-100 lg:pl-12">
             <div className="text-[11px] font-semibold tracking-[0.14em] uppercase text-zinc-400 mb-7">
-              In production at
+              Trusted by
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 items-center">
               {COMPANIES.map((c) => (
