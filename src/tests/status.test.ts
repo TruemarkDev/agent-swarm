@@ -12,7 +12,10 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   closeDb,
   createAgent,
@@ -506,9 +509,22 @@ describe("hasFirstCompletedTask", () => {
 
 describe("validateProviderCredentials — error scrubbing", () => {
   const realFetch = globalThis.fetch;
+  const realHome = process.env.HOME;
+  // Isolate HOME for the whole suite so a dev's real `~/.codex/auth.json`
+  // doesn't accidentally satisfy the codex presence check during tests that
+  // expect to exercise the env-credential path.
+  let homeSandbox = "";
+
+  beforeEach(() => {
+    homeSandbox = mkdtempSync(join(tmpdir(), "swarm-cred-test-home-"));
+    process.env.HOME = homeSandbox;
+  });
 
   afterEach(() => {
     globalThis.fetch = realFetch;
+    if (realHome === undefined) delete process.env.HOME;
+    else process.env.HOME = realHome;
+    if (homeSandbox) rmSync(homeSandbox, { recursive: true, force: true });
   });
 
   test("returns ok:false when neither OAuth nor API key is set for claude", async () => {
@@ -563,6 +579,39 @@ describe("validateProviderCredentials — error scrubbing", () => {
     const result = await validateProviderCredentials("codex");
     expect(result.ok).toBe(true);
     expect(fetchCalled).toBe(false);
+  });
+
+  test("codex with ~/.codex/auth.json on disk passes via presence check (no env creds)", async () => {
+    // Reproduces the prod scenario: agent boots from a credential pool that
+    // pre-materialised auth.json (or ran `codex login` in a prior boot), so
+    // CODEX_OAUTH and OPENAI_API_KEY are NOT in env at live-test time. Before
+    // this fix the check returned `ok:false` with "Set either CODEX_OAUTH or
+    // OPENAI_API_KEY" even though the agent was happily running tasks.
+    mkdirSync(join(homeSandbox, ".codex"), { recursive: true });
+    writeFileSync(
+      join(homeSandbox, ".codex/auth.json"),
+      JSON.stringify({ tokens: { id_token: "x" } }),
+    );
+    delete process.env.CODEX_OAUTH;
+    delete process.env.OPENAI_API_KEY;
+    let fetchCalled = false;
+    globalThis.fetch = (async () => {
+      fetchCalled = true;
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+    const result = await validateProviderCredentials("codex");
+    expect(result.ok).toBe(true);
+    expect(fetchCalled).toBe(false);
+  });
+
+  test("codex with no auth.json and no env creds reports the new error", async () => {
+    delete process.env.CODEX_OAUTH;
+    delete process.env.OPENAI_API_KEY;
+    const result = await validateProviderCredentials("codex");
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("auth.json");
+    expect(result.error).toContain("CODEX_OAUTH");
+    expect(result.error).toContain("OPENAI_API_KEY");
   });
 
   test("codex with malformed CODEX_OAUTH falls back to OPENAI_API_KEY", async () => {

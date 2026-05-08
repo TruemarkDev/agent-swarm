@@ -195,6 +195,20 @@ async function checkOpenRouter(apiKey: string): Promise<LiveValidationResult> {
 }
 
 /**
+ * Mirror of the disk check in `checkCodexCredentials` — true when the worker
+ * has a materialised `~/.codex/auth.json`, which is the canonical "logged in"
+ * state for codex (whether the entrypoint wrote it from `CODEX_OAUTH`, from
+ * `OPENAI_API_KEY` via `codex login --with-api-key`, or it was baked into the
+ * image). The codex adapter handles refresh internally, so this is treated as
+ * a presence check at live-test time (no upstream call).
+ */
+function codexAuthFileExists(env: Record<string, string | undefined>): boolean {
+  // Delegate to the adapter's own check so the auth.json path stays in one
+  // place. `satisfiedBy === "file"` is set iff the file exists on disk.
+  return checkCodexCredentials(env).satisfiedBy === "file";
+}
+
+/**
  * Extract the OAuth `access_token` from a `CODEX_OAUTH` env blob. The blob is
  * a JSON object shaped like `CodexOAuthCredentials` (`{access, refresh,
  * expires, accountId}`) — see `src/providers/codex-oauth/types.ts`. Returns
@@ -221,7 +235,7 @@ function parseCodexOAuthAccess(blob: string | undefined): string | null {
  * |------------------|-------------------------------------------------------------------------|--------------------------------|
  * | `claude`         | `CLAUDE_CODE_OAUTH_TOKEN` (Pro/Max OAuth) → `ANTHROPIC_API_KEY`         | Anthropic `/v1/models`         |
  * | `claude-managed` | `ANTHROPIC_API_KEY` (managed agents always use API key + managed envs)  | Anthropic `/v1/models`         |
- * | `codex`          | `CODEX_OAUTH` (ChatGPT OAuth) → `OPENAI_API_KEY`                        | OpenAI `/v1/models`            |
+ * | `codex`          | `~/.codex/auth.json` (file) → `CODEX_OAUTH` (env OAuth) → `OPENAI_API_KEY` | OpenAI `/v1/models` (api-key path only) |
  * | `opencode`       | `OPENROUTER_API_KEY` → `ANTHROPIC_API_KEY` → `OPENAI_API_KEY` (pi-style) | matching provider's `/v1/models` |
  * | `pi`             | `OPENROUTER_API_KEY` → `ANTHROPIC_API_KEY` → `OPENAI_API_KEY`           | matching provider's `/v1/models` |
  * | `devin`          | `DEVIN_API_KEY` (+ `DEVIN_API_BASE_URL` override)                       | `${baseUrl}/v1/sessions?limit=1` |
@@ -258,14 +272,25 @@ export async function validateProviderCredentials(provider: string): Promise<Liv
         };
       }
       case "codex": {
-        // ChatGPT OAuth wins over API key, matching `codex-adapter.ts`. OAuth
-        // tokens (parseable blob with non-empty `access`) get a presence check
-        // only — the adapter handles refresh at boot.
+        // Resolution order matches `checkCodexCredentials`:
+        //   1) `~/.codex/auth.json` on disk (canonical state once `codex login`
+        //      has run, or when the entrypoint pre-materialised it from
+        //      CODEX_OAUTH / OPENAI_API_KEY). This is the OAuth-equivalent path
+        //      for codex — refresh logic lives in the adapter, so we only do a
+        //      presence check (no upstream call).
+        //   2) `CODEX_OAUTH` env blob — same OAuth treatment.
+        //   3) `OPENAI_API_KEY` env var — live-test against OpenAI `/v1/models`.
+        //
+        // Without (1), an agent that boots fresh from a credential pool whose
+        // entrypoint already wrote auth.json would falsely fail the live test
+        // with "Set either CODEX_OAUTH or OPENAI_API_KEY" (observed in prod).
+        if (codexAuthFileExists(env)) return presenceCheckOk();
         if (parseCodexOAuthAccess(env.CODEX_OAUTH)) return presenceCheckOk();
         if (env.OPENAI_API_KEY) return checkOpenAiApiKey(env.OPENAI_API_KEY);
         return {
           ok: false,
-          error: "Set either CODEX_OAUTH or OPENAI_API_KEY.",
+          error:
+            "No codex credential found (no ~/.codex/auth.json, CODEX_OAUTH, or OPENAI_API_KEY).",
           latency_ms: Date.now() - startedAt,
         };
       }
