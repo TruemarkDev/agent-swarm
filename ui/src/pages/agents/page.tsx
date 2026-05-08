@@ -5,8 +5,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAgents } from "@/api/hooks/use-agents";
 import type { AgentStatus, AgentWithTasks } from "@/api/types";
 import { DataGrid } from "@/components/shared/data-grid";
+import { HarnessCell } from "@/components/shared/harness-cell";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -41,8 +41,8 @@ export default function AgentsPage() {
         minWidth: 180,
         cellRenderer: (params: { value: string; data: AgentWithTasks | undefined }) => (
           <span className="flex items-center gap-1.5 font-semibold">
-            {params.value}
             {params.data?.isLead && <Crown className="h-3.5 w-3.5 text-primary shrink-0" />}
+            {params.value}
           </span>
         ),
       },
@@ -50,15 +50,13 @@ export default function AgentsPage() {
       {
         field: "harnessProvider",
         headerName: "Harness",
-        width: 120,
-        cellRenderer: (params: { value: string | null | undefined }) =>
-          params.value ? (
-            <Badge variant="outline" size="tag" className="shrink-0">
-              {params.value}
-            </Badge>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          ),
+        width: 200,
+        cellRenderer: (params: { data: AgentWithTasks | undefined }) => (
+          <HarnessCell
+            harnessProvider={params.data?.harnessProvider}
+            credStatus={params.data?.credStatus}
+          />
+        ),
       },
       {
         field: "status",
@@ -83,30 +81,10 @@ export default function AgentsPage() {
         },
       },
       {
-        field: "capabilities",
-        headerName: "Capabilities",
-        flex: 1,
-        minWidth: 250,
-        cellRenderer: (params: { value: string[] | undefined }) => (
-          <div className="flex gap-1 items-center justify-center">
-            {params.value?.slice(0, 2).map((cap) => (
-              <Badge key={cap} variant="outline" size="tag" className="shrink-0">
-                {cap}
-              </Badge>
-            ))}
-            {(params.value?.length ?? 0) > 2 && (
-              <span className="text-[9px] text-muted-foreground font-medium shrink-0">
-                +{(params.value?.length ?? 0) - 2}
-              </span>
-            )}
-          </div>
-        ),
-        sortable: false,
-      },
-      {
         field: "lastUpdatedAt",
         headerName: "Last Updated",
-        width: 150,
+        flex: 1,
+        minWidth: 150,
         valueFormatter: (params) => (params.value ? formatSmartTime(params.value) : ""),
       },
     ],

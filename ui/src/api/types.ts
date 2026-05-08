@@ -42,8 +42,30 @@ export interface Agent {
    * time (or `null`/missing for legacy rows from before migration 054).
    */
   harnessProvider?: ProviderName | null;
+  /**
+   * Migration 055: worker-self-reported credential snapshot. Null when the
+   * worker hasn't booted yet, or `CRED_CHECK_DISABLE=1` opted it out.
+   */
+  credStatus?: AgentCredStatus | null;
   createdAt: string;
   lastUpdatedAt: string;
+}
+
+export interface AgentCredStatusLiveTest {
+  ok: boolean;
+  error?: string | null;
+  latency_ms: number;
+  testedAt: number;
+}
+
+export interface AgentCredStatus {
+  ready: boolean;
+  missing: string[];
+  satisfiedBy?: "env" | "file" | "side-effect-pending" | null;
+  hint?: string | null;
+  liveTest?: AgentCredStatusLiveTest | null;
+  reportedAt: number;
+  reportKind?: "boot" | "post_task";
 }
 
 export interface AgentTask {
