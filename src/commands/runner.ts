@@ -2257,8 +2257,14 @@ async function checkCompletedProcesses(
         failureReason = result.failureReason;
         console.log(`[${role}] Detected error for task ${taskId.slice(0, 8)}: ${failureReason}`);
 
-        // If rate-limited and we know which key was used, report it
-        if (credentialInfo && /rate.?limit|hit your limit/i.test(failureReason)) {
+        // If rate-limited and we know which key was used, report it.
+        // Codex adapter prefixes failure reasons with `[rate-limit]` /
+        // `[usage-limit]` (see codex-adapter.formatTerminalError); Claude
+        // surfaces "rate limit" / "hit your limit" via SessionErrorTracker.
+        if (
+          credentialInfo &&
+          /rate.?limit|hit your limit|usage[ _-]?limit|too many requests/i.test(failureReason)
+        ) {
           // Try to extract reset time from the error message (e.g. "resets 3pm (UTC)")
           const parsedResetTime = parseRateLimitResetTime(failureReason);
           const defaultCooldownMs = 5 * 60 * 1000;
