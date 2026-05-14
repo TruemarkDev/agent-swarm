@@ -320,8 +320,8 @@ jobs:
         uses: tarasyarema/dokploy-deploy-action@main
         with:
           deployment_type: compose
-          compose_id: h4or-knfw2HWkTzjLmrn8
-          compose_name: agent-swarm-nrz8v0
+          compose_id: u-iCRBK0Ta-pOedSaTjqc
+          compose_name: swarm-new-22yjmi
           dokploy_url: https://app.dokploy.com
           auth_token: ${{ secrets.DOKPLOY_TOKEN }}
           wait_for_completion: true
