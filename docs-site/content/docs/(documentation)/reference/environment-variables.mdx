@@ -17,6 +17,8 @@ Complete reference for all environment variables used by Agent Swarm.
 | `ENV` | — | Environment mode (`development` adds prefix to Slack agent names) |
 | `DATABASE_PATH` | `./agent-swarm-db.sqlite` | SQLite database file path |
 | `SQLITE_VEC_EXTENSION_PATH` | — | Path to `vec0.so` native extension for sqlite-vec vector search. Set automatically in the Docker image (`/app/extensions/vec0.so`). Only needed for non-Docker deployments. |
+| `SCRIPT_RUNTIME_DIR` | — | Directory holding the pre-built script-runtime bundles (`eval-harness.bundle.js`, `stdlib.bundle.js`, `swarm-sdk.bundle.js`). Set automatically in the Docker image (`/app/scripts-runtime`). Required by the scripts runtime when running as a compiled binary, since the harness subprocess cannot read the binary's `/$bunfs/` virtual filesystem. |
+| `TS_LIB_DIR` | — | Directory holding the TypeScript `lib.*.d.ts` files used by script typecheck. Set automatically in the Docker image (`/app/typescript-lib`). Required in compiled-binary mode so the TypeScript compiler can resolve the default lib. |
 | `SECRETS_ENCRYPTION_KEY` | Auto-generated on first boot | Master key for encrypting `swarm_config` secret rows at rest. Accepts base64 (43-char, e.g. `openssl rand -base64 32`) **or** 64-char hex (e.g. `openssl rand -hex 32`). Decodes to exactly 32 bytes. **Reserved**: cannot be stored in the DB config store. See [Encryption Key](/docs/guides/deployment#encryption-key). |
 | `SECRETS_ENCRYPTION_KEY_FILE` | — | Alternative to `SECRETS_ENCRYPTION_KEY`: absolute path to a file whose contents are the base64- or hex-encoded key. Useful with Docker secrets or k8s `Secret` volume mounts. |
 | `SCHEDULER_INTERVAL_MS` | `10000` | Polling interval for scheduled tasks (ms) |
