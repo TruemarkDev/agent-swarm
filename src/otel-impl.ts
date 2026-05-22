@@ -107,15 +107,29 @@ function spanAdapter(span: Span): AdaptedSwarmSpan {
   };
 }
 
+/**
+ * Resolve the OTel `service.name` for a process, scoped by its role so the API
+ * and worker processes are distinguishable in SigNoz:
+ *
+ * - `api`  → `agent-swarm-api`
+ * - worker → `agent-swarm` (unchanged)
+ *
+ * `OTEL_SERVICE_NAME` (set identically across processes in our compose/deploy
+ * env) is treated as the base name — the `-api` suffix is still appended for the
+ * API role so a shared env var can't collapse both processes onto one name.
+ */
+export function resolveServiceName(serviceRole: string): string {
+  const baseServiceName = process.env.OTEL_SERVICE_NAME || "agent-swarm";
+  return serviceRole === "api" ? `${baseServiceName}-api` : baseServiceName;
+}
+
 export async function boot(serviceRole: string): Promise<void> {
   if (sdk) return;
 
   const configuredResourceAttributes = parseResourceAttributes();
   const deploymentEnvironment =
     configuredResourceAttributes["deployment.environment"] || process.env.NODE_ENV || "development";
-  const serviceName =
-    process.env.OTEL_SERVICE_NAME ||
-    (serviceRole === "api" ? "agent-swarm-api" : "agent-swarm-worker");
+  const serviceName = resolveServiceName(serviceRole);
   sdk = new NodeSDK({
     resource: resourceFromAttributes({
       ...configuredResourceAttributes,
