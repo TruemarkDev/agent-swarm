@@ -45,6 +45,7 @@ import { handlePoll } from "./poll";
 import { handlePricing } from "./pricing";
 import { handlePromptTemplates } from "./prompt-templates";
 import { handleRepos } from "./repos";
+import { deriveSpanName } from "./route-def";
 import { handleSchedules } from "./schedules";
 import { handleScripts } from "./scripts";
 import { handleSessionData } from "./session-data";
@@ -119,10 +120,14 @@ const httpServer = createHttpServer(async (req, res) => {
 
   await withRemoteContext(req.headers as Record<string, unknown>, async () => {
     const reqPath = req.url?.split("?")[0] ?? "";
+    const pathSegments = getPathSegments(req.url || "");
     const skipSpan = reqPath === "/api/poll" && !isPollTracingEnabled();
+    // Per OTel HTTP semantic conventions: `{METHOD} {route-template}` — gives
+    // SigNoz a bounded-cardinality endpoint key. Raw path stays on `url.path`.
+    const spanName = deriveSpanName(req.method, pathSegments);
     const span = skipSpan
       ? null
-      : startSpan("http.server", {
+      : startSpan(spanName, {
           "http.request.method": req.method ?? "",
           "url.path": reqPath,
           "agent.id": req.headers["x-agent-id"] as string | undefined,
@@ -157,7 +162,6 @@ const httpServer = createHttpServer(async (req, res) => {
     // ── Core routes (OPTIONS, health, auth, /me, /cancelled-tasks, /ping, /close) ──
     if (await handleCore(req, res, req.headers["x-agent-id"] as string | undefined, apiKey)) return;
 
-    const pathSegments = getPathSegments(req.url || "");
     const queryParams = parseQueryParams(req.url || "");
     const myAgentId = req.headers["x-agent-id"] as string | undefined;
 

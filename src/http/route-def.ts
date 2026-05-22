@@ -80,6 +80,50 @@ export function isPublicRoute(method: string | undefined, pathSegments: string[]
   return false;
 }
 
+/**
+ * Look up the registered route definition matching this request, or `undefined`
+ * if no `route()`-defined handler matches. First match wins (registry order).
+ *
+ * Used by the API HTTP span name to map a request to a bounded-cardinality
+ * route template (e.g. `/api/tasks/{id}` instead of `/api/tasks/<uuid>`) so
+ * SigNoz can group traces by endpoint. Core routes (/health, /ping, /me, etc.)
+ * and the MCP transport don't go through the `route()` factory and will return
+ * `undefined` here — callers should fall back to a low-cardinality default.
+ */
+export function findRoute(
+  method: string | undefined,
+  pathSegments: string[],
+): RouteDef | undefined {
+  for (const def of routeRegistry) {
+    if (
+      matchRoute(method, pathSegments, def.method.toUpperCase(), def.pattern, def.exact ?? true)
+    ) {
+      return def;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Compute a low-cardinality OTel span name for an inbound HTTP request, following
+ * the HTTP semantic conventions: `{METHOD} {route-template}`.
+ *
+ * - Matched `route()` handler: `GET /api/tasks/{id}`
+ * - Unmatched (core /health /ping /me, MCP transport, 404s): `GET /<first-segment>`
+ * - Root or empty path: bare `GET`
+ *
+ * Never embeds raw path params or query strings — the goal is one span name per
+ * endpoint so SigNoz can group by it. The raw path is still preserved on the
+ * `url.path` attribute.
+ */
+export function deriveSpanName(method: string | undefined, pathSegments: string[]): string {
+  const m = (method ?? "").toUpperCase() || "UNKNOWN";
+  const matched = findRoute(method, pathSegments);
+  if (matched) return `${m} ${matched.path}`;
+  const first = pathSegments[0];
+  return first ? `${m} /${first}` : m;
+}
+
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
 export function route<
