@@ -184,6 +184,7 @@ Sends a task to a specific agent, creates an unassigned task for the pool, or of
 | `slackChannelId` | `string` | No | - | Slack channel ID to post progress updates to. Use this to propagate Slack context when delegating from a Slack thread. |
 | `slackThreadTs` | `string` | No | - | Slack thread timestamp. Required with slackChannelId for thread-level updates. |
 | `slackUserId` | `string` | No | - | Slack user ID of the original requester. |
+| `requestedByUserId` | `string` | No | - | ID of the human user who originally requested this task chain. When omitted, inherited from the caller's current task so the attribution flows through multi-hop delegation automatically. |
 
 ### get-task-details
 
@@ -233,7 +234,7 @@ Cancel a task that is pending or in progress. Only the lead or task creator can 
 
 **Resolve user identity**
 
-Look up a canonical user profile by an `(kind, externalId)` pair (e.g. {kind: 'slack', externalId: 'U_X'}) OR by email (primary or alias). Returns the user profile or 'No user found'.
+Look up a canonical user profile by an `(kind, externalId)` pair (e.g. {kind: 'slack', externalId: 'U_X'}), by email (primary or alias), or by swarm `userId`. Returns the user profile including `externalIds` (all linked platform identities) or 'No user found'.
 
 *No parameters*
 
