@@ -6,7 +6,7 @@
  */
 
 import type { TaskAttachment } from "../types";
-import { getAgentFsLiveUrl, getAppUrl } from "../utils/constants";
+import { buildAgentFsLiveUrl, getAppUrl } from "../utils/constants";
 
 // Slack limits section text to 3000 chars; we use 2900 for safety
 const MAX_SECTION_LENGTH = 2900;
@@ -138,11 +138,11 @@ const SLACK_ATTACHMENTS_MAX = 20;
  * *plain* URLs (no `<URL|text>` mrkdwn shortcut) because Slack auto-unfurls
  * them and the shortcut form has historically triggered `invalid_blocks`.
  *
- * `agent-fs` attachments currently fall back to the raw `agent-fs:<path>`
- * form: the attachment row stores only `path`, not the agent-fs `<org_id>/
- * <drive_id>` needed to build a public live-host URL. Phase 2b can resolve
- * these properly once we add an org/drive lookup; the spec explicitly
- * permits the raw-path fallback here.
+ * `agent-fs` attachments emit a public live-host URL when the row carries
+ * `orgId` and `driveId` (or when the operator-set
+ * `AGENT_FS_DEFAULT_ORG_ID` / `AGENT_FS_DEFAULT_DRIVE_ID` env-vars provide
+ * a fallback). Without either, we keep the `agent-fs:<path>` raw fallback so
+ * the link is at least copy-pasteable.
  */
 function resolveAttachmentDisplay(a: TaskAttachment): string {
   switch (a.kind) {
@@ -150,11 +150,14 @@ function resolveAttachmentDisplay(a: TaskAttachment): string {
       return a.url ?? "";
     case "page":
       return a.pageId ? `${getAppUrl()}/pages/${a.pageId}` : "page:";
-    case "agent-fs":
-      // TODO(phase-2b): once org_id / drive_id are stored on attachments,
-      // resolve to `${getAgentFsLiveUrl()}/file/~/<org_id>/<drive_id>/<path>`.
-      void getAgentFsLiveUrl;
-      return `agent-fs:${a.path ?? ""}`;
+    case "agent-fs": {
+      const url = buildAgentFsLiveUrl({
+        path: a.path,
+        orgId: a.orgId,
+        driveId: a.driveId,
+      });
+      return url ?? `agent-fs:${a.path ?? ""}`;
+    }
     case "shared-fs":
       return `shared-fs:${a.path ?? ""}`;
   }
@@ -208,6 +211,14 @@ export interface TreeNode {
   slackReplySent?: boolean;
   output?: string; // Only used when !slackReplySent on completion
   failureReason?: string; // Always shown on failure
+  /**
+   * Pointer-based attachments to surface on the tree-message render. The
+   * watcher populates this for completed/terminal nodes so links survive on
+   * the tree path (`buildTreeBlocks`) — not just the DM completion card
+   * (`buildCompletedBlocks` / `responses.ts`). Optional so unit tests and
+   * non-attachment paths stay terse.
+   */
+  attachments?: TaskAttachment[];
   children: TreeNode[];
 }
 
@@ -438,6 +449,34 @@ function isTreeActive(node: TreeNode): boolean {
   return node.children.some(isTreeActive);
 }
 
+// Cap on completed-task attachment blocks rendered per tree-message. Slack's
+// API enforces 50-block / 40KB ceilings; the existing tree section + cancel
+// buttons already consume a few blocks, and each attachment block can carry
+// up to SLACK_ATTACHMENTS_MAX (=20) lines. 10 keeps us well inside both
+// limits even on wide trees while preserving the most-recent completions.
+const SLACK_TREE_ATTACHMENT_BLOCKS_MAX = 10;
+
+/**
+ * Flatten a tree (in render order: root first, then children) and collect
+ * every completed node whose `attachments` array is non-empty. The tree
+ * walks roots → children, mirroring `renderTree` so the attachment ordering
+ * matches what the reader sees in the main tree section.
+ */
+function collectAttachmentNodes(roots: TreeNode[]): TreeNode[] {
+  const out: TreeNode[] = [];
+  for (const root of roots) {
+    const stack: TreeNode[] = [root];
+    while (stack.length > 0) {
+      const node = stack.shift() as TreeNode;
+      if (node.status === "completed" && node.attachments && node.attachments.length > 0) {
+        out.push(node);
+      }
+      for (const child of node.children) stack.push(child);
+    }
+  }
+  return out;
+}
+
 /**
  * Build Slack blocks for a tree-based status message.
  *
@@ -445,6 +484,11 @@ function isTreeActive(node: TreeNode): boolean {
  * agent names, task links, durations, progress text, and error details.
  *
  * For in-progress trees, includes a cancel button per active root.
+ *
+ * Completed nodes that carry `attachments` (populated by the watcher from
+ * `task_attachments`) emit one extra section block per node listing the
+ * pointer-based artifacts. Capped at {@link SLACK_TREE_ATTACHMENT_BLOCKS_MAX}
+ * per tree-message; overflow becomes a `… and M more …` context footer.
  *
  * @param roots - Array of root TreeNode objects (one per assigned task in a round)
  * @returns SlackBlock[] suitable for chat.postMessage / chat.update
@@ -456,6 +500,30 @@ export function buildTreeBlocks(roots: TreeNode[]): SlackBlock[] {
 
   const treeTexts = roots.map(renderTree);
   const blocks: SlackBlock[] = [sectionBlock(treeTexts.join("\n\n"))];
+
+  // Attachment blocks for completed nodes, with per-tree-message cap.
+  const attachmentNodes = collectAttachmentNodes(roots);
+  const visibleAttachmentNodes = attachmentNodes.slice(0, SLACK_TREE_ATTACHMENT_BLOCKS_MAX);
+  for (const node of visibleAttachmentNodes) {
+    const body = formatAttachmentsBlockForSlack(node.attachments ?? []);
+    if (!body) continue;
+    // `formatAttachmentsBlockForSlack` returns a string starting with two
+    // newlines so it can be appended directly to a completion body. In tree
+    // mode we render the block on its own, prefixed by a header that ties
+    // the attachments back to the right child node.
+    const header = `*${node.agentName}* (${getTaskLink(node.taskId)})`;
+    blocks.push(sectionBlock(`${header}${body}`));
+  }
+  const hiddenAttachmentNodes = attachmentNodes.length - visibleAttachmentNodes.length;
+  if (hiddenAttachmentNodes > 0) {
+    blocks.push(
+      contextBlock(
+        `_… and ${hiddenAttachmentNodes} more completed task${
+          hiddenAttachmentNodes === 1 ? "" : "s"
+        } with attachments_`,
+      ),
+    );
+  }
 
   // Add cancel buttons for active roots
   for (const root of roots) {

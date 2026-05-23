@@ -243,6 +243,20 @@ export const AttachmentInputSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("agent-fs"),
     path: z.string().min(1).describe("agent-fs path the attachment points at."),
+    orgId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "agent-fs org id — paired with `driveId` lets the renderer build a public live-host URL.",
+      ),
+    driveId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "agent-fs drive id — paired with `orgId` lets the renderer build a public live-host URL.",
+      ),
     ...attachmentCommonFields,
   }),
   z.object({
@@ -272,6 +286,9 @@ export const TaskAttachmentSchema = z.object({
   url: z.string().optional(),
   path: z.string().optional(),
   pageId: z.string().optional(),
+  // agent-fs only — pair with `path` to build a public live-host URL.
+  orgId: z.string().optional(),
+  driveId: z.string().optional(),
   mimeType: z.string().optional(),
   sizeBytes: z.number().int().min(0).optional(),
   sha256: z.string().optional(),

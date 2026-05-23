@@ -309,4 +309,45 @@ describe("task_attachments — Phase 1 (pointer-based, append-only)", () => {
     expect(rows.length).toBe(1);
     expect(TaskAttachmentSchema.safeParse(rows[0]).success).toBe(true);
   });
+
+  // Phase 2a follow-up: agent-fs attachments can now carry org_id / drive_id
+  // so renderers (Slack, UI) can build a public live-host URL.
+  test("agent-fs attachment persists orgId and driveId across the round-trip", () => {
+    const task = newTask("agent-fs org/drive round-trip");
+    const stored = insertTaskAttachment({
+      taskId: task.id,
+      agentId,
+      name: "doc.md",
+      kind: "agent-fs",
+      path: "/thoughts/doc.md",
+      orgId: "org-abc",
+      driveId: "drive-xyz",
+    });
+    expect(stored.orgId).toBe("org-abc");
+    expect(stored.driveId).toBe("drive-xyz");
+
+    const rows = getTaskAttachments(task.id);
+    const target = rows.find((r) => r.id === stored.id);
+    expect(target?.orgId).toBe("org-abc");
+    expect(target?.driveId).toBe("drive-xyz");
+    expect(TaskAttachmentSchema.safeParse(target).success).toBe(true);
+  });
+
+  test("AttachmentInputSchema accepts agent-fs with optional orgId/driveId", () => {
+    const withIds = AttachmentInputSchema.safeParse({
+      kind: "agent-fs",
+      name: "doc",
+      path: "/x",
+      orgId: "o",
+      driveId: "d",
+    });
+    expect(withIds.success).toBe(true);
+
+    const withoutIds = AttachmentInputSchema.safeParse({
+      kind: "agent-fs",
+      name: "doc",
+      path: "/x",
+    });
+    expect(withoutIds.success).toBe(true);
+  });
 });

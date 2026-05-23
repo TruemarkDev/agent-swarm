@@ -549,6 +549,10 @@ export interface TaskAttachment {
   url?: string;
   path?: string;
   pageId?: string;
+  /** agent-fs only — paired with `driveId` to build a public live-host URL. */
+  orgId?: string;
+  /** agent-fs only — paired with `orgId` to build a public live-host URL. */
+  driveId?: string;
   mimeType?: string;
   sizeBytes?: number;
   sha256?: string;

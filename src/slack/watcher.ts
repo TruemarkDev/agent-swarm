@@ -3,6 +3,7 @@ import {
   getChildTasks,
   getCompletedSlackTasks,
   getInProgressSlackTasks,
+  getTaskAttachments,
   getTaskById,
 } from "../be/db";
 import type { AgentTask } from "../types";
@@ -133,6 +134,13 @@ export function buildTreeNodes(tree: TreeMessageState): TreeNode[] {
           childDuration = formatDuration(new Date(child.createdAt), new Date(child.finishedAt));
         }
 
+        // Only completed nodes get attachments — that's the only path
+        // `buildTreeBlocks` renders them, and the lookup is one query per
+        // completed task per tree render. Skipping non-completed avoids
+        // hot-path queries for every in-progress poll tick.
+        const childAttachments =
+          child.status === "completed" ? getTaskAttachments(child.id) : undefined;
+
         childNodes.push({
           taskId: child.id,
           agentName: childAgentName,
@@ -142,6 +150,7 @@ export function buildTreeNodes(tree: TreeMessageState): TreeNode[] {
           slackReplySent: child.slackReplySent,
           output: child.output ?? undefined,
           failureReason: child.failureReason ?? undefined,
+          attachments: childAttachments,
           children: [],
         });
 
@@ -149,6 +158,8 @@ export function buildTreeNodes(tree: TreeMessageState): TreeNode[] {
         taskQueue.push(child.id);
       }
     }
+
+    const rootAttachments = task.status === "completed" ? getTaskAttachments(task.id) : undefined;
 
     nodes.push({
       taskId: task.id,
@@ -159,6 +170,7 @@ export function buildTreeNodes(tree: TreeMessageState): TreeNode[] {
       slackReplySent: task.slackReplySent,
       output: task.output ?? undefined,
       failureReason: task.failureReason ?? undefined,
+      attachments: rootAttachments,
       children: childNodes,
     });
   }

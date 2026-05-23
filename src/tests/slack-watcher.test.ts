@@ -10,6 +10,7 @@ import {
   getCompletedSlackTasks,
   getInProgressSlackTasks,
   initDb,
+  insertTaskAttachment,
   startTask,
 } from "../be/db";
 import {
@@ -334,6 +335,88 @@ describe("buildTreeNodes", () => {
 
     // Missing task should be skipped, not crash
     expect(nodes.length).toBe(0);
+  });
+
+  test("populates attachments for completed nodes (root + child)", () => {
+    const lead = createAgent({ name: "AttachLead", isLead: true, status: "idle" });
+    const worker = createAgent({ name: "AttachWorker", isLead: false, status: "idle" });
+
+    const parent = createTaskExtended("parent with attachments", {
+      agentId: lead.id,
+      source: "slack",
+      slackChannelId: "C_ATTACH",
+      slackThreadTs: "2020202020.000001",
+      slackUserId: "U_ATTACH",
+    });
+    const child = createTaskExtended("child with attachments", {
+      agentId: worker.id,
+      source: "slack",
+      parentTaskId: parent.id,
+    });
+    // Mark both completed so the watcher pulls their attachments.
+    completeTask(parent.id, "done");
+    completeTask(child.id, "done");
+
+    insertTaskAttachment({
+      taskId: parent.id,
+      agentId: lead.id,
+      name: "parent-report.pdf",
+      kind: "url",
+      url: "https://example.com/parent.pdf",
+    });
+    insertTaskAttachment({
+      taskId: child.id,
+      agentId: worker.id,
+      name: "child-log.txt",
+      kind: "agent-fs",
+      path: "/logs/child.txt",
+      orgId: "org-1",
+      driveId: "drive-1",
+    });
+
+    const messageTs = "2020202020.000002";
+    registerTreeMessage(parent.id, "C_ATTACH", "2020202020.000001", messageTs);
+
+    const tree = _getTreeMessages().get(messageTs)!;
+    const nodes = buildTreeNodes(tree);
+
+    expect(nodes.length).toBe(1);
+    expect(nodes[0].attachments?.length).toBe(1);
+    expect(nodes[0].attachments?.[0].name).toBe("parent-report.pdf");
+    expect(nodes[0].children.length).toBe(1);
+    expect(nodes[0].children[0].attachments?.length).toBe(1);
+    expect(nodes[0].children[0].attachments?.[0].orgId).toBe("org-1");
+    expect(nodes[0].children[0].attachments?.[0].driveId).toBe("drive-1");
+  });
+
+  test("does NOT fetch attachments for non-completed nodes (pending parent)", () => {
+    const agent = createAgent({ name: "NoFetchAgent", isLead: true, status: "idle" });
+    const task = createTaskExtended("pending no fetch", {
+      agentId: agent.id,
+      source: "slack",
+      slackChannelId: "C_NOFETCH",
+      slackThreadTs: "3030303030.000001",
+      slackUserId: "U_NOFETCH",
+    });
+    // Pre-populate an attachment even though the task is still pending.
+    insertTaskAttachment({
+      taskId: task.id,
+      agentId: agent.id,
+      name: "should-not-render.pdf",
+      kind: "url",
+      url: "https://example.com/notyet.pdf",
+    });
+
+    const messageTs = "3030303030.000002";
+    registerTreeMessage(task.id, "C_NOFETCH", "3030303030.000001", messageTs);
+
+    const tree = _getTreeMessages().get(messageTs)!;
+    const nodes = buildTreeNodes(tree);
+
+    expect(nodes.length).toBe(1);
+    // Pending tasks should not have attachments populated — the renderer
+    // never shows them in that state, so the query is skipped.
+    expect(nodes[0].attachments).toBeUndefined();
   });
 });
 

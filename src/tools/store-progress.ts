@@ -175,6 +175,8 @@ export const registerStoreProgressTool = (server: McpServer) => {
               url: a.kind === "url" ? a.url : undefined,
               path: a.kind === "agent-fs" || a.kind === "shared-fs" ? a.path : undefined,
               pageId: a.kind === "page" ? a.pageId : undefined,
+              orgId: a.kind === "agent-fs" ? a.orgId : undefined,
+              driveId: a.kind === "agent-fs" ? a.driveId : undefined,
               mimeType: a.mimeType,
               sizeBytes: a.sizeBytes,
               sha256: a.sha256,

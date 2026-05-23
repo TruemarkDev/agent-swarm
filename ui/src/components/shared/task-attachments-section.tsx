@@ -22,11 +22,42 @@ function getAgentFsLiveUrl(): string {
   return (raw || DEFAULT_AGENT_FS_LIVE_URL).replace(/\/+$/, "");
 }
 
+function getAgentFsDefaultOrgId(): string | undefined {
+  const raw = import.meta.env.VITE_AGENT_FS_DEFAULT_ORG_ID?.trim();
+  return raw || undefined;
+}
+
+function getAgentFsDefaultDriveId(): string | undefined {
+  const raw = import.meta.env.VITE_AGENT_FS_DEFAULT_DRIVE_ID?.trim();
+  return raw || undefined;
+}
+
+/**
+ * Mirror of `buildAgentFsLiveUrl` in `src/utils/constants.ts`. Returns null
+ * when the path is missing or no org/drive pair is available (row-level
+ * fields with env-var fallback) — callers fall back to a non-clickable row.
+ */
+export function buildAgentFsLiveUrl(opts: {
+  path?: string | null;
+  orgId?: string | null;
+  driveId?: string | null;
+}): string | null {
+  const path = opts.path?.trim();
+  if (!path) return null;
+  const orgId = opts.orgId?.trim() || getAgentFsDefaultOrgId();
+  const driveId = opts.driveId?.trim() || getAgentFsDefaultDriveId();
+  if (!orgId || !driveId) return null;
+  const host = getAgentFsLiveUrl();
+  const normalizedPath = path.replace(/^\/+/, "");
+  return `${host}/file/~/${orgId}/${driveId}/${normalizedPath}`;
+}
+
 /**
  * Per-row resolution mirrors `resolveAttachmentDisplay` in `src/slack/blocks.ts`.
- * For `agent-fs` we can't build a public URL yet (the attachment row only
- * stores `path`, not the agent-fs `<org_id>/<drive_id>` tuple); display the
- * raw path until Phase 2b adds the lookup.
+ * For `agent-fs` we build a public live-URL when the row carries `orgId` and
+ * `driveId` (or the operator-set env-var fallbacks supply them); otherwise
+ * the row stays non-clickable and we surface the raw path so users can copy
+ * it manually.
  */
 function resolveHref(a: TaskAttachment): string | null {
   switch (a.kind) {
@@ -37,10 +68,7 @@ function resolveHref(a: TaskAttachment): string | null {
       // an anchor with target="_blank" so the link survives copy/paste.
       return a.pageId ? `/pages/${a.pageId}` : null;
     case "agent-fs":
-      // TODO(phase-2b): once org_id / drive_id land on the attachment row,
-      // build `${getAgentFsLiveUrl()}/file/~/<org_id>/<drive_id>/<path>`.
-      void getAgentFsLiveUrl;
-      return null;
+      return buildAgentFsLiveUrl({ path: a.path, orgId: a.orgId, driveId: a.driveId });
     case "shared-fs":
       return null;
   }

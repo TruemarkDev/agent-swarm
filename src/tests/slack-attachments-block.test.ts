@@ -73,12 +73,91 @@ describe("formatAttachmentsBlockForSlack", () => {
     }
   });
 
-  test("agent-fs falls back to raw path display (no public URL until phase-2b)", () => {
-    const out = formatAttachmentsBlockForSlack([
-      mkAttachment({ kind: "agent-fs", name: "doc", path: "/thoughts/a.md" }),
-    ]);
-    expect(out).toContain("agent-fs:/thoughts/a.md");
-    expect(out).not.toContain("live.agent-fs.dev");
+  test("agent-fs falls back to raw path display when org/drive ids are missing", () => {
+    const origOrg = process.env.AGENT_FS_DEFAULT_ORG_ID;
+    const origDrive = process.env.AGENT_FS_DEFAULT_DRIVE_ID;
+    delete process.env.AGENT_FS_DEFAULT_ORG_ID;
+    delete process.env.AGENT_FS_DEFAULT_DRIVE_ID;
+    try {
+      const out = formatAttachmentsBlockForSlack([
+        mkAttachment({ kind: "agent-fs", name: "doc", path: "/thoughts/a.md" }),
+      ]);
+      expect(out).toContain("agent-fs:/thoughts/a.md");
+      expect(out).not.toContain("live.agent-fs.dev");
+    } finally {
+      if (origOrg === undefined) delete process.env.AGENT_FS_DEFAULT_ORG_ID;
+      else process.env.AGENT_FS_DEFAULT_ORG_ID = origOrg;
+      if (origDrive === undefined) delete process.env.AGENT_FS_DEFAULT_DRIVE_ID;
+      else process.env.AGENT_FS_DEFAULT_DRIVE_ID = origDrive;
+    }
+  });
+
+  test("agent-fs with row-level orgId + driveId emits the live-host URL", () => {
+    const origHost = process.env.AGENT_FS_LIVE_URL;
+    delete process.env.AGENT_FS_LIVE_URL;
+    try {
+      const out = formatAttachmentsBlockForSlack([
+        mkAttachment({
+          kind: "agent-fs",
+          name: "doc",
+          path: "/thoughts/a.md",
+          orgId: "org-1",
+          driveId: "drive-1",
+        }),
+      ]);
+      // Live URL strips the leading slash from `path` so the join is clean.
+      expect(out).toContain("https://live.agent-fs.dev/file/~/org-1/drive-1/thoughts/a.md");
+      expect(out).not.toContain("agent-fs:/thoughts/a.md");
+    } finally {
+      if (origHost === undefined) delete process.env.AGENT_FS_LIVE_URL;
+      else process.env.AGENT_FS_LIVE_URL = origHost;
+    }
+  });
+
+  test("agent-fs uses AGENT_FS_DEFAULT_* env-var fallback when row has no ids", () => {
+    const origOrg = process.env.AGENT_FS_DEFAULT_ORG_ID;
+    const origDrive = process.env.AGENT_FS_DEFAULT_DRIVE_ID;
+    process.env.AGENT_FS_DEFAULT_ORG_ID = "fallback-org";
+    process.env.AGENT_FS_DEFAULT_DRIVE_ID = "fallback-drive";
+    try {
+      const out = formatAttachmentsBlockForSlack([
+        mkAttachment({ kind: "agent-fs", name: "doc", path: "thoughts/a.md" }),
+      ]);
+      expect(out).toContain(
+        "https://live.agent-fs.dev/file/~/fallback-org/fallback-drive/thoughts/a.md",
+      );
+    } finally {
+      if (origOrg === undefined) delete process.env.AGENT_FS_DEFAULT_ORG_ID;
+      else process.env.AGENT_FS_DEFAULT_ORG_ID = origOrg;
+      if (origDrive === undefined) delete process.env.AGENT_FS_DEFAULT_DRIVE_ID;
+      else process.env.AGENT_FS_DEFAULT_DRIVE_ID = origDrive;
+    }
+  });
+
+  test("agent-fs row-level org/drive ids win over env-var fallbacks", () => {
+    const origOrg = process.env.AGENT_FS_DEFAULT_ORG_ID;
+    const origDrive = process.env.AGENT_FS_DEFAULT_DRIVE_ID;
+    process.env.AGENT_FS_DEFAULT_ORG_ID = "fallback-org";
+    process.env.AGENT_FS_DEFAULT_DRIVE_ID = "fallback-drive";
+    try {
+      const out = formatAttachmentsBlockForSlack([
+        mkAttachment({
+          kind: "agent-fs",
+          name: "doc",
+          path: "thoughts/a.md",
+          orgId: "row-org",
+          driveId: "row-drive",
+        }),
+      ]);
+      expect(out).toContain("https://live.agent-fs.dev/file/~/row-org/row-drive/thoughts/a.md");
+      expect(out).not.toContain("fallback-org");
+      expect(out).not.toContain("fallback-drive");
+    } finally {
+      if (origOrg === undefined) delete process.env.AGENT_FS_DEFAULT_ORG_ID;
+      else process.env.AGENT_FS_DEFAULT_ORG_ID = origOrg;
+      if (origDrive === undefined) delete process.env.AGENT_FS_DEFAULT_DRIVE_ID;
+      else process.env.AGENT_FS_DEFAULT_DRIVE_ID = origDrive;
+    }
   });
 
   test("shared-fs displays the path verbatim", () => {

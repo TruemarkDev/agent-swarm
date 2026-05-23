@@ -13,6 +13,7 @@ import {
   markdownToSlack,
   type TreeNode,
 } from "../slack/blocks";
+import type { TaskAttachment } from "../types";
 
 describe("markdownToSlack", () => {
   test("converts bold correctly without italic interference", () => {
@@ -907,5 +908,166 @@ describe("buildTreeBlocks", () => {
 
     expect(text).toContain("✅ *Solo*");
     expect(text).not.toContain("Should not appear");
+  });
+});
+
+// --- buildTreeBlocks attachment rendering (Phase 2a follow-up) ---
+
+function mkAttachment(overrides: Partial<TaskAttachment>): TaskAttachment {
+  return {
+    id: crypto.randomUUID(),
+    taskId: "00000000-0000-0000-0000-000000000000",
+    agentId: null,
+    name: overrides.name ?? "attachment.txt",
+    kind: overrides.kind ?? "url",
+    isPrimary: overrides.isPrimary ?? false,
+    createdAt: "2026-05-22T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: section blocks are loose plain objects
+type AnyBlock = any;
+
+function sectionTexts(blocks: AnyBlock[]): string[] {
+  return blocks
+    .filter((b: AnyBlock) => b.type === "section")
+    .map((b: AnyBlock) => b.text?.text ?? "");
+}
+
+describe("buildTreeBlocks — attachments rendering", () => {
+  test("tree with no attachments emits no extra section blocks", () => {
+    const root: TreeNode = {
+      taskId: makeTaskId("aatt0001"),
+      agentName: "Lead",
+      status: "completed",
+      duration: "10s",
+      children: [
+        {
+          taskId: makeTaskId("aatt0002"),
+          agentName: "Worker",
+          status: "completed",
+          duration: "5s",
+          slackReplySent: true,
+          // No attachments field
+          children: [],
+        },
+      ],
+    };
+
+    const blocks = buildTreeBlocks([root]);
+    // Exactly one section block (the tree text); no attachment add-ons; no
+    // cancel buttons (everything is terminal).
+    expect(blocks.length).toBe(1);
+    expect(blocks[0].type).toBe("section");
+    expect(blocks[0].text.text).not.toContain("Attachments");
+  });
+
+  test("completed node with 2 attachments adds a dedicated attachment block", () => {
+    const root: TreeNode = {
+      taskId: makeTaskId("aatt0010"),
+      agentName: "Lead",
+      status: "completed",
+      duration: "1m",
+      children: [
+        {
+          taskId: makeTaskId("aatt0011"),
+          agentName: "Worker",
+          status: "completed",
+          duration: "30s",
+          slackReplySent: true,
+          attachments: [
+            mkAttachment({ kind: "url", name: "report", url: "https://x.test/r" }),
+            mkAttachment({ kind: "url", name: "log", url: "https://x.test/l" }),
+          ],
+          children: [],
+        },
+      ],
+    };
+
+    const blocks = buildTreeBlocks([root]);
+    // 1 tree section + 1 attachment section.
+    expect(blocks.length).toBe(2);
+    const texts = sectionTexts(blocks);
+    // Tree section contains the worker.
+    expect(texts[0]).toContain("*Worker*");
+    // Attachment section contains the header AND the two attachments.
+    const attachmentSection = texts[1];
+    expect(attachmentSection).toContain("*Worker*");
+    expect(attachmentSection).toContain("Attachments (2):");
+    expect(attachmentSection).toContain("https://x.test/r");
+    expect(attachmentSection).toContain("https://x.test/l");
+  });
+
+  test("non-completed nodes never emit attachment blocks even if attachments is populated", () => {
+    // Watcher won't populate these for non-completed, but guard the renderer.
+    const root: TreeNode = {
+      taskId: makeTaskId("aatt0020"),
+      agentName: "Lead",
+      status: "in_progress",
+      attachments: [mkAttachment({ kind: "url", name: "x", url: "https://x.test" })],
+      children: [],
+    };
+
+    const blocks = buildTreeBlocks([root]);
+    // Tree section + cancel button only.
+    expect(blocks.length).toBe(2);
+    expect(blocks[0].type).toBe("section");
+    expect(blocks[0].text.text).not.toContain("Attachments");
+    expect(blocks[1].type).toBe("actions");
+  });
+
+  test("per-tree-message cap: 12 completed children with attachments → 10 blocks + footer", () => {
+    const children: TreeNode[] = Array.from({ length: 12 }, (_, i) => ({
+      taskId: makeTaskId(`aatt${(30 + i).toString().padStart(4, "0")}`),
+      agentName: `Worker${i}`,
+      status: "completed",
+      duration: "1s",
+      slackReplySent: true,
+      attachments: [mkAttachment({ kind: "url", name: `a${i}`, url: `https://x.test/${i}` })],
+      children: [],
+    }));
+    const root: TreeNode = {
+      taskId: makeTaskId("aatt0029"),
+      agentName: "Lead",
+      status: "completed",
+      duration: "1m",
+      children,
+    };
+
+    const blocks = buildTreeBlocks([root]);
+    // 1 tree section + 10 attachment sections + 1 context footer.
+    const sectionBlocks = blocks.filter((b: AnyBlock) => b.type === "section");
+    const contextBlocks = blocks.filter((b: AnyBlock) => b.type === "context");
+    expect(sectionBlocks.length).toBe(1 + 10);
+    expect(contextBlocks.length).toBe(1);
+    const footerText = contextBlocks[0].elements[0].text as string;
+    expect(footerText).toContain("2 more");
+    expect(footerText).toContain("completed task");
+  });
+
+  test("singular footer when exactly one attachment block is hidden", () => {
+    const children: TreeNode[] = Array.from({ length: 11 }, (_, i) => ({
+      taskId: makeTaskId(`aatt${(50 + i).toString().padStart(4, "0")}`),
+      agentName: `Worker${i}`,
+      status: "completed",
+      duration: "1s",
+      slackReplySent: true,
+      attachments: [mkAttachment({ kind: "url", name: `a${i}`, url: `https://x.test/${i}` })],
+      children: [],
+    }));
+    const root: TreeNode = {
+      taskId: makeTaskId("aatt0049"),
+      agentName: "Lead",
+      status: "completed",
+      duration: "1m",
+      children,
+    };
+
+    const blocks = buildTreeBlocks([root]);
+    const contextBlocks = blocks.filter((b: AnyBlock) => b.type === "context");
+    expect(contextBlocks.length).toBe(1);
+    const footerText = contextBlocks[0].elements[0].text as string;
+    expect(footerText).toContain("1 more completed task with attachments");
   });
 });

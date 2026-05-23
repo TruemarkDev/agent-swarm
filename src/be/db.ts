@@ -2146,6 +2146,8 @@ type TaskAttachmentRow = {
   url: string | null;
   path: string | null;
   page_id: string | null;
+  agent_fs_org_id: string | null;
+  agent_fs_drive_id: string | null;
   mime_type: string | null;
   size_bytes: number | null;
   sha256: string | null;
@@ -2165,6 +2167,8 @@ function rowToTaskAttachment(row: TaskAttachmentRow): TaskAttachment {
     url: row.url ?? undefined,
     path: row.path ?? undefined,
     pageId: row.page_id ?? undefined,
+    orgId: row.agent_fs_org_id ?? undefined,
+    driveId: row.agent_fs_drive_id ?? undefined,
     mimeType: row.mime_type ?? undefined,
     sizeBytes: row.size_bytes ?? undefined,
     sha256: row.sha256 ?? undefined,
@@ -2183,6 +2187,10 @@ export interface InsertTaskAttachmentInput {
   url?: string;
   path?: string;
   pageId?: string;
+  /** agent-fs only — paired with `driveId` to build a public live-host URL. */
+  orgId?: string;
+  /** agent-fs only — paired with `orgId` to build a public live-host URL. */
+  driveId?: string;
   mimeType?: string;
   sizeBytes?: number;
   sha256?: string;
@@ -2247,6 +2255,8 @@ export function insertTaskAttachment(input: InsertTaskAttachmentInput): TaskAtta
         string | null,
         string | null,
         string | null,
+        string | null,
+        string | null,
         number | null,
         string | null,
         string | null,
@@ -2256,8 +2266,9 @@ export function insertTaskAttachment(input: InsertTaskAttachmentInput): TaskAtta
     >(
       `INSERT INTO task_attachments
          (id, task_id, agent_id, name, kind, url, path, page_id,
+          agent_fs_org_id, agent_fs_drive_id,
           mime_type, size_bytes, sha256, intent, description, is_primary)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
     )
     .get(
@@ -2269,6 +2280,8 @@ export function insertTaskAttachment(input: InsertTaskAttachmentInput): TaskAtta
       input.url ?? null,
       input.path ?? null,
       input.pageId ?? null,
+      input.orgId ?? null,
+      input.driveId ?? null,
       input.mimeType ?? null,
       input.sizeBytes ?? null,
       input.sha256 ?? null,

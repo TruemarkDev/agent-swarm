@@ -836,6 +836,7 @@
                           "env",
                           "file",
                           "side-effect-pending",
+                          "sdk-delegated",
                           null
                         ],
                         "default": null
