@@ -277,8 +277,10 @@ Identity envs that brand the swarm and gate cloud-only UX. All are read on every
 | `AGENT_FS_API_URL` | Agent-fs API URL. When set as a global swarm config, enables agent-fs integration with persistent shared filesystem |
 | `AGENT_FS_API_KEY` | Per-agent API key, auto-generated on first boot via agent-fs registration. Stored as agent-scoped secret |
 | `AGENT_FS_SHARED_ORG_ID` | Shared org ID for the swarm's agent-fs organization. Auto-created by the lead on first boot |
+| `AGENT_FS_DEFAULT_ORG_ID` | Default agent-fs org ID used to auto-resolve `agent-fs` attachment rows on `store-progress` when `orgId` is missing. Scope precedence: agent > global |
+| `AGENT_FS_DEFAULT_DRIVE_ID` | Default agent-fs drive ID used to auto-resolve `agent-fs` attachment rows on `store-progress` when `driveId` is missing. Scope precedence: agent > global |
 
-These are managed as swarm config values (via `set-config` with `scope: "global"`), not environment variables in `.env` files. The entrypoint registers agents with agent-fs on first boot and stores API keys as agent-scoped secrets. The runner propagates `AGENT_FS_SHARED_ORG_ID` to worker processes automatically.
+These are managed as swarm config values (via `set-config` with `scope: "global"`), not environment variables in `.env` files. The entrypoint registers agents with agent-fs on first boot and stores API keys as agent-scoped secrets. The runner propagates `AGENT_FS_SHARED_ORG_ID` to worker processes automatically. The two `AGENT_FS_DEFAULT_*` keys let the server fill in attachment IDs server-side so the renderer can emit full live-host URLs — per-row IDs always win, and missing config + missing row IDs still falls back to the `agent-fs:<path>` form.
 
 ## x402 Payments
 
