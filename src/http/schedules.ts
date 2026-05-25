@@ -405,7 +405,10 @@ export async function handleSchedules(
     // and the patch nulls the other, which the schema-level check cannot see.
     if (existing.scheduleType !== "one_time") {
       const timing = mergeScheduleTiming(
-        { cronExpression: existing.cronExpression ?? null, intervalMs: existing.intervalMs ?? null },
+        {
+          cronExpression: existing.cronExpression ?? null,
+          intervalMs: existing.intervalMs ?? null,
+        },
         { cronExpression: parsed.body.cronExpression, intervalMs: parsed.body.intervalMs },
       );
       if (validateRecurringTiming(timing)) {
@@ -454,16 +457,21 @@ export async function handleSchedules(
         (parsed.body.enabled === true && !existing.enabled)
       ) {
         const timing = mergeScheduleTiming(
-          { cronExpression: existing.cronExpression ?? null, intervalMs: existing.intervalMs ?? null },
+          {
+            cronExpression: existing.cronExpression ?? null,
+            intervalMs: existing.intervalMs ?? null,
+          },
           { cronExpression: parsed.body.cronExpression, intervalMs: parsed.body.intervalMs },
         );
         const mergedTimezone =
           parsed.body.timezone !== undefined ? parsed.body.timezone : existing.timezone;
         if (timing.mergedCron || timing.mergedInterval) {
           // biome-ignore lint/suspicious/noExplicitAny: need partial ScheduledTask for calculateNextRun
-          body.nextRunAt = calculateNextRun(
-            { cronExpression: timing.mergedCron, intervalMs: timing.mergedInterval, timezone: mergedTimezone } as any,
-          );
+          body.nextRunAt = calculateNextRun({
+            cronExpression: timing.mergedCron,
+            intervalMs: timing.mergedInterval,
+            timezone: mergedTimezone,
+          } as any);
         }
       }
     }

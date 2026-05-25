@@ -11,10 +11,7 @@ describe("mergeScheduleTiming", () => {
   });
 
   test("undefined preserves existing", () => {
-    const result = mergeScheduleTiming(
-      { cronExpression: "0 * * * *", intervalMs: null },
-      {},
-    );
+    const result = mergeScheduleTiming({ cronExpression: "0 * * * *", intervalMs: null }, {});
     expect(result).toEqual({ mergedCron: "0 * * * *", mergedInterval: null });
   });
 
