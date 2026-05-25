@@ -192,17 +192,17 @@ Pure function — no HTTP, no I/O beyond the DB query. Trivially unit-testable t
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Type-check passes: `bun run tsc:check`
-- [ ] Lint passes: `bun run lint`
-- [ ] New tests pass: `bun test src/tests/skills-signature.test.ts`
-- [ ] Existing skills tests still pass: `bun test src/tests/skill-sync.test.ts src/tests/skills-*.test.ts`
-- [ ] OpenAPI regen produces no unintended diff beyond the new route: `bun run docs:openapi && git diff --stat openapi.json docs-site/content/docs/api-reference`
-- [ ] DB boundary holds: `bash scripts/check-db-boundary.sh`
+- [x] Type-check passes: `bun run tsc:check`
+- [x] Lint passes: `bun run lint`
+- [x] New tests pass: `bun test src/tests/skills-signature.test.ts`
+- [x] Existing skills tests still pass: `bun test src/tests/skill-sync.test.ts src/tests/skills-*.test.ts`
+- [x] OpenAPI regen produces no unintended diff beyond the new route: `bun run docs:openapi && git diff --stat openapi.json docs-site/content/docs/api-reference`
+- [x] DB boundary holds: `bash scripts/check-db-boundary.sh`
 
 #### Automated QA:
-- [ ] Test asserts hash changes on install, uninstall, toggle-inactive, and `updateSkill` mutations
-- [ ] Test asserts hash is byte-for-byte identical across two no-op calls (deterministic, no time-based input in the hashed canonical)
-- [ ] Test asserts agent A's signature is unaffected by mutations on agent B's installed skills
+- [x] Test asserts hash changes on install, uninstall, toggle-inactive, and `updateSkill` mutations
+- [x] Test asserts hash is byte-for-byte identical across two no-op calls (deterministic, no time-based input in the hashed canonical)
+- [x] Test asserts agent A's signature is unaffected by mutations on agent B's installed skills
 
 #### Manual Verification:
 - [ ] `curl -H "Authorization: Bearer $AGENT_SWARM_API_KEY" -H "X-Agent-ID: $AGENT_ID" $MCP_BASE_URL/api/agents/$AGENT_ID/skills/signature` returns `{ hash, count, generatedAt }` against a running dev server

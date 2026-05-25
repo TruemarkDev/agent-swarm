@@ -107,3 +107,34 @@ export function syncSkillsToFilesystem(
 
   return { synced, removed, errors };
 }
+
+export interface SkillsSignature {
+  hash: string;
+  count: number;
+}
+
+/**
+ * Compute a stable signature over an agent's installed-and-enabled skill set.
+ *
+ * Hash inputs are the per-row mutation-tracking fields — any install,
+ * uninstall, toggle, or skill-update mutates at least one of them. Output is
+ * deterministic and contains no timestamps beyond per-row mutation fields.
+ */
+export function computeAgentSkillsSignature(agentId: string): SkillsSignature {
+  const skills = getAgentSkills(agentId);
+  const sorted = [...skills].sort((a, b) => a.id.localeCompare(b.id));
+  const canonical = JSON.stringify(
+    sorted.map((s) => [
+      s.id,
+      s.name,
+      s.version,
+      s.isEnabled,
+      s.isActive,
+      s.lastUpdatedAt,
+      s.sourceHash ?? "",
+      s.installedAt,
+    ]),
+  );
+  const hash = new Bun.CryptoHasher("sha256").update(canonical).digest("hex");
+  return { hash, count: sorted.length };
+}
