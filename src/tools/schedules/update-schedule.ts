@@ -7,6 +7,7 @@ import {
   getScheduledTaskByName,
   updateScheduledTask,
 } from "@/be/db";
+import { mergeScheduleTiming, validateRecurringTiming } from "@/be/schedules/validate";
 import { calculateNextRun } from "@/scheduler";
 import { createToolRegistrar } from "@/tools/utils";
 
@@ -225,6 +226,32 @@ export const registerUpdateScheduleTool = (server: McpServer) => {
             updateData.nextRunAt = undefined;
           }
         } else {
+          // Validate merged timing before recalc — runs BEFORE the enabled===false
+          // skip-recalc branch so disabling cannot bypass the invariant.
+          const timing = mergeScheduleTiming(
+            {
+              cronExpression: schedule.cronExpression ?? null,
+              intervalMs: schedule.intervalMs ?? null,
+            },
+            { cronExpression, intervalMs },
+          );
+          const timingError = validateRecurringTiming(timing);
+          if (timingError) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "At least one of intervalMs or cronExpression must be set for recurring schedules.",
+                },
+              ],
+              structuredContent: {
+                success: false,
+                message:
+                  "At least one of intervalMs or cronExpression must be set for recurring schedules.",
+              },
+            };
+          }
+
           const needsNextRunRecalc =
             cronExpression !== undefined ||
             intervalMs !== undefined ||
@@ -232,12 +259,15 @@ export const registerUpdateScheduleTool = (server: McpServer) => {
             (enabled === true && !schedule.enabled);
 
           if (needsNextRunRecalc && enabled !== false) {
-            const tempSchedule = {
-              cronExpression: cronExpression ?? schedule.cronExpression,
-              intervalMs: intervalMs ?? schedule.intervalMs,
-              timezone: timezone ?? schedule.timezone,
-            } as Parameters<typeof calculateNextRun>[0];
-            updateData.nextRunAt = calculateNextRun(tempSchedule, new Date());
+            const mergedTimezone = timezone !== undefined ? timezone : schedule.timezone;
+            updateData.nextRunAt = calculateNextRun(
+              {
+                cronExpression: timing.mergedCron,
+                intervalMs: timing.mergedInterval,
+                timezone: mergedTimezone,
+              } as Parameters<typeof calculateNextRun>[0],
+              new Date(),
+            );
           } else if (enabled === false) {
             updateData.nextRunAt = undefined;
           }
