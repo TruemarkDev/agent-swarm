@@ -11,6 +11,7 @@ import {
   getScheduledTasks,
   updateScheduledTask,
 } from "../be/db";
+import { mergeScheduleTiming, validateRecurringTiming } from "../be/schedules/validate";
 import { calculateNextRun } from "../scheduler/scheduler";
 import { scheduleContextKey } from "../tasks/context-key";
 import { createTaskWithSiblingAwareness } from "../tasks/sibling-awareness";
@@ -115,8 +116,8 @@ const updateSchedule = route({
   body: z.object({
     name: z.string().optional(),
     description: z.string().optional(),
-    cronExpression: z.string().optional(),
-    intervalMs: z.number().int().optional(),
+    cronExpression: z.string().nullable().optional(),
+    intervalMs: z.number().int().positive().nullable().optional(),
     taskTemplate: z.string().optional(),
     taskType: z.string().optional(),
     tags: z.array(z.string()).optional(),
@@ -400,6 +401,22 @@ export async function handleSchedules(
       return true;
     }
 
+    // Validate merged timing state — catches cases where one side is null in the DB
+    // and the patch nulls the other, which the schema-level check cannot see.
+    if (existing.scheduleType !== "one_time") {
+      const timing = mergeScheduleTiming(
+        {
+          cronExpression: existing.cronExpression ?? null,
+          intervalMs: existing.intervalMs ?? null,
+        },
+        { cronExpression: parsed.body.cronExpression, intervalMs: parsed.body.intervalMs },
+      );
+      if (validateRecurringTiming(timing)) {
+        jsonError(res, "At least one of intervalMs or cronExpression must be set", 400);
+        return true;
+      }
+    }
+
     if (parsed.body.cronExpression) {
       try {
         CronExpressionParser.parse(parsed.body.cronExpression);
@@ -439,14 +456,22 @@ export async function handleSchedules(
         parsed.body.intervalMs !== undefined ||
         (parsed.body.enabled === true && !existing.enabled)
       ) {
-        const merged = {
-          cronExpression: parsed.body.cronExpression ?? existing.cronExpression,
-          intervalMs: parsed.body.intervalMs ?? existing.intervalMs,
-          timezone: parsed.body.timezone ?? existing.timezone,
-        };
-        if (merged.cronExpression || merged.intervalMs) {
+        const timing = mergeScheduleTiming(
+          {
+            cronExpression: existing.cronExpression ?? null,
+            intervalMs: existing.intervalMs ?? null,
+          },
+          { cronExpression: parsed.body.cronExpression, intervalMs: parsed.body.intervalMs },
+        );
+        const mergedTimezone =
+          parsed.body.timezone !== undefined ? parsed.body.timezone : existing.timezone;
+        if (timing.mergedCron || timing.mergedInterval) {
           // biome-ignore lint/suspicious/noExplicitAny: need partial ScheduledTask for calculateNextRun
-          body.nextRunAt = calculateNextRun(merged as any);
+          body.nextRunAt = calculateNextRun({
+            cronExpression: timing.mergedCron,
+            intervalMs: timing.mergedInterval,
+            timezone: mergedTimezone,
+          } as any);
         }
       }
     }

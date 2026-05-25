@@ -6929,10 +6929,17 @@
                     "type": "string"
                   },
                   "cronExpression": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "intervalMs": {
-                    "type": "integer"
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "exclusiveMinimum": 0
                   },
                   "taskTemplate": {
                     "type": "string"
