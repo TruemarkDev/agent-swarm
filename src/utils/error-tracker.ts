@@ -11,13 +11,34 @@ export interface ErrorSignal {
 }
 
 /**
- * Clamps a candidate reset timestamp (ms) to [now+60s, now+6h].
+ * Maximum cooldown horizon for a rate-limit reset. A weekly OAuth limit resets
+ * up to ~7 days out, so the cap must be at least that or a weekly-limited key
+ * gets re-clamped to a short cooldown and re-handed to a worker every few hours
+ * (the fail-every-6h sawtooth). 7d still guards against absurd far-future
+ * (malformed) values.
+ */
+export const MAX_RATE_LIMIT_RESET_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Single source of truth for "does this text look like a rate-limit signal?".
+ * Shared by the runner's cooldown gate and {@link parseStderrForErrors} so the
+ * two matchers can't drift. Tolerates a qualifier between "your" and "limit"
+ * (weekly / 5-hour / daily): matches "hit your weekly limit", "hit your 5-hour
+ * limit", "hit your limit", "Claude usage limit reached", "rate limit exceeded",
+ * "429 Too Many Requests"; does not match "No conversation found with session ID".
+ */
+export function isRateLimitMessage(s: string): boolean {
+  return /rate.?limit|hit your[\w\s-]*limit|usage[ _-]?limit|too many requests|\b429\b/i.test(s);
+}
+
+/**
+ * Clamps a candidate reset timestamp (ms) to [now+60s, now+7d].
  * Protects against past timestamps (clock skew) and absurdly far future values (malformed).
  */
 function clampRateLimitResetMs(candidateMs: number): number {
   const nowMs = Date.now();
   const minMs = nowMs + 60_000;
-  const maxMs = nowMs + 6 * 60 * 60 * 1000;
+  const maxMs = nowMs + MAX_RATE_LIMIT_RESET_MS;
   return Math.min(Math.max(candidateMs, minMs), maxMs);
 }
 
@@ -338,12 +359,7 @@ export function parseStderrForErrors(stderr: string, tracker: SessionErrorTracke
   const lower = stderr.toLowerCase();
   const firstLine = stderr.trim().split("\n")[0] ?? stderr.trim();
 
-  if (
-    lower.includes("rate limit") ||
-    lower.includes("rate_limit") ||
-    lower.includes("429") ||
-    lower.includes("hit your limit")
-  ) {
+  if (isRateLimitMessage(stderr)) {
     tracker.addStderrError(firstLine);
   } else if (
     lower.includes("authentication") ||

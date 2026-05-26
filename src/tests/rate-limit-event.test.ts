@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { SessionErrorTracker, trackErrorFromJson } from "../utils/error-tracker";
+import {
+  isRateLimitMessage,
+  parseStderrForErrors,
+  SessionErrorTracker,
+  trackErrorFromJson,
+} from "../utils/error-tracker";
 
 // Verbatim fixture from Linear CAI-1279 (session logs for task b7fbbdb9-4922-41d9-88ec-21febd6c4fec)
 const FIXTURE_REJECTED = {
@@ -125,7 +130,7 @@ describe("SessionErrorTracker — rate_limit_event processing", () => {
     expect(parsedMs).toBeLessThanOrEqual(nowMs + 65_000);
   });
 
-  test("resetsAt absurdly far in future → clamped to now+6h (malformed defense)", () => {
+  test("resetsAt absurdly far in future → clamped to now+7d (malformed defense)", () => {
     const tracker = new SessionErrorTracker();
     // Year 2099 in seconds
     tracker.processRateLimitEvent({
@@ -137,8 +142,25 @@ describe("SessionErrorTracker — rate_limit_event processing", () => {
     expect(result).toBeDefined();
     const parsedMs = new Date(result!).getTime();
     const nowMs = Date.now();
-    const sixHoursMs = 6 * 60 * 60 * 1000;
-    expect(parsedMs).toBeLessThanOrEqual(nowMs + sixHoursMs + 1000); // within 6h (+1s tolerance)
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    expect(parsedMs).toBeLessThanOrEqual(nowMs + sevenDaysMs + 1000); // within 7d (+1s tolerance)
+  });
+
+  test("legitimate weekly reset (~2 days out) is honored, not clamped to 6h", () => {
+    const tracker = new SessionErrorTracker();
+    const twoDaysFromNowSec = Math.floor(Date.now() / 1000) + 2 * 24 * 60 * 60;
+    tracker.processRateLimitEvent({
+      type: "rate_limit_event",
+      rate_limit_info: { status: "rejected", resetsAt: twoDaysFromNowSec, rateLimitType: "weekly" },
+    });
+
+    const result = tracker.getRateLimitResetAt();
+    expect(result).toBeDefined();
+    const parsedMs = new Date(result!).getTime();
+    const nowMs = Date.now();
+    // The real reset is ~2 days out — must be honored, not capped at 6h.
+    expect(parsedMs).toBeGreaterThan(nowMs + 6 * 60 * 60 * 1000);
+    expect(parsedMs).toBeLessThanOrEqual(nowMs + 2 * 24 * 60 * 60 * 1000 + 1000);
   });
 
   test("multiple rate_limit_event lines → last rejected one wins", () => {
@@ -288,5 +310,45 @@ describe("three-tier resolver logic (unit test via clamp helper)", () => {
     const nowMs = Date.now();
     expect(resolvedMs).toBeGreaterThanOrEqual(nowMs + 4 * 60_000);
     expect(resolvedMs).toBeLessThanOrEqual(nowMs + 6 * 60_000);
+  });
+});
+
+describe("isRateLimitMessage — shared matcher (runner gate + stderr parser)", () => {
+  test.each([
+    "You've hit your weekly limit · resets May 28, 5pm (UTC)",
+    "hit your 5-hour limit",
+    "hit your limit",
+    "Claude usage limit reached",
+    "hit your daily limit",
+    "rate limit exceeded",
+    "rate_limit error",
+    "429 Too Many Requests",
+    "Error: too many requests, slow down",
+    "[rate-limit] codex prefix",
+    "[usage-limit] codex prefix",
+  ])("matches rate-limit signal: %s", (msg) => {
+    expect(isRateLimitMessage(msg)).toBe(true);
+  });
+
+  test.each([
+    "No conversation found with session ID abc",
+    "Max turns exceeded",
+    "Authentication failed: invalid token",
+    "Error during execution: file not found",
+    "Read 4290 bytes from stream",
+  ])("does NOT match non-rate-limit text: %s", (msg) => {
+    expect(isRateLimitMessage(msg)).toBe(false);
+  });
+
+  test("parseStderrForErrors flags a weekly-limit stderr line as an error", () => {
+    const tracker = new SessionErrorTracker();
+    parseStderrForErrors("You've hit your weekly limit · resets May 28, 5pm (UTC)", tracker);
+    expect(tracker.hasErrors()).toBe(true);
+  });
+
+  test("parseStderrForErrors still flags a bare 429 stderr line", () => {
+    const tracker = new SessionErrorTracker();
+    parseStderrForErrors("HTTP 429 returned by upstream", tracker);
+    expect(tracker.hasErrors()).toBe(true);
   });
 });
