@@ -49,6 +49,7 @@ import { scrubSecrets } from "../utils/secret-scrubber.ts";
 import { refreshSkillsIfChanged } from "../utils/skills-refresh.ts";
 import { detectVcsProvider } from "../vcs/index.ts";
 import { interpolate } from "../workflows/template.ts";
+import { buildContextPreamble } from "./context-preamble.ts";
 import { awaitCredentials, BootMaxWaitExceededError, EX_CONFIG } from "./credential-wait.ts";
 import {
   buildCredStatusReport,
@@ -3752,6 +3753,19 @@ export async function runAgent(config: RunnerConfig, opts: RunnerOptions) {
           console.log(`[${role}] Injected relevant memories into resumed task prompt`);
         }
 
+        // Universal context preamble: inject for all providers when task is a follow-up.
+        // Gives non-resumable providers (opencode/pi/devin) prior-task context; also
+        // acts as a bounded safety net for resumable ones (claude/codex).
+        if (task.parentTaskId && apiUrl) {
+          const contextPreamble = await buildContextPreamble(apiUrl, apiKey, task.parentTaskId);
+          if (contextPreamble) {
+            resumePrompt = contextPreamble + resumePrompt;
+            console.log(
+              `[${role}] Injected context preamble into resumed follow-up task prompt (parent: ${task.parentTaskId.slice(0, 8)})`,
+            );
+          }
+        }
+
         // Resolve provider-aware resume: prefer own session, then parent.
         const resumeCandidates: ResumeSessionCandidate[] = [
           {
@@ -4107,9 +4121,22 @@ export async function runAgent(config: RunnerConfig, opts: RunnerOptions) {
           }
         }
 
+        // Universal context preamble: inject for all providers when task is a follow-up.
+        // Gives non-resumable providers (opencode/pi/devin) prior-task context; also
+        // acts as a bounded safety net for resumable ones (claude/codex).
+        const taskObj = trigger.task as { parentTaskId?: string } | undefined;
+        if (taskObj?.parentTaskId && apiUrl) {
+          const contextPreamble = await buildContextPreamble(apiUrl, apiKey, taskObj.parentTaskId);
+          if (contextPreamble) {
+            triggerPrompt = contextPreamble + triggerPrompt;
+            console.log(
+              `[${role}] Injected context preamble for follow-up task (parent: ${taskObj.parentTaskId.slice(0, 8)})`,
+            );
+          }
+        }
+
         // Resolve provider-aware resume for child tasks with parentTaskId.
         let resumeSessionId: string | undefined;
-        const taskObj = trigger.task as { parentTaskId?: string } | undefined;
         if (taskObj?.parentTaskId) {
           const parentSession = await fetchProviderSessionInfo(
             apiUrl,
