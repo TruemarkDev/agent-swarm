@@ -8,8 +8,8 @@ topic: "Agent model reasoning/effort control across Claude, Codex, Pi, and Openc
 tags: [research, codebase, runtime-settings, harness-providers, ui]
 status: complete
 autonomy: critical
-last_updated: 2026-05-26
-last_updated_by: Codex
+last_updated: 2026-05-27
+last_updated_by: Claude
 ---
 
 # Research: Agent Model Reasoning/Effort Runtime Control
@@ -80,6 +80,86 @@ The UI model registry already covers the four local harnesses requested here (`c
 - The only exact `effort` field found in scoped code is skill metadata, not runtime model control (`src/types.ts:1538`, `src/be/skill-parser.ts:5`).
 - `ui/src/lib/modelsdev-cache.json:12` contains model metadata fields including `reasoning`, but `ui/src/lib/agent-runtime-models.ts:27` maps cached models only into ID/name/cost/context-oriented `ModelOption` data.
 
+### External Provider Reasoning/Effort Knobs
+
+Cross-harness picture: each of the four local harnesses exposes a different shape — Claude is numeric-budget + adaptive, Codex/Pi are qualitative effort levels, Opencode is provider-gated pass-through. None offer a unified `effort` field that works across providers without adapter-side translation.
+
+#### Claude (Anthropic `claude` CLI)
+
+Two orthogonal knobs: a **qualitative effort level** (`output_config.effort`, surfaced as `/effort`) and a **numeric thinking budget** (`thinking.budget_tokens`, surfaced as `MAX_THINKING_TOKENS`). On Opus 4.7 the budget knob is rejected and only effort applies; on Sonnet 4.x / Opus 4.6 both are usable.
+
+- **`/effort` slash command** (Claude Code v2.1.76+): sets `output_config.effort` on the Messages API; influences both reasoning depth and output verbosity.
+  - Values: `low | medium | high | xhigh | max` plus `auto` (reset to model default). `xhigh` is Opus-4.7-only (added v2.1.111).
+  - Persists across sessions in `settings.json` under key `effortLevel`.
+  - Non-interactive: env var `CLAUDE_CODE_EFFORT_LEVEL=<level>` is the reliable path — overrides `settings.json` and the `/effort` picker. CLI flag `--effort` exists but is buggy in `-p` (non-interactive) mode (anthropics/claude-code#41028, #50598), so `claude-adapter.ts` should set the env var when spawning.
+  - `max` has known persistence/downgrade bugs in `settings.json` (#30726, #43322) — env var is the only reliable way to pin it.
+  - Default on Opus 4.7 in Claude Code is `xhigh`.
+- **`MAX_THINKING_TOKENS`** (env or `settings.json`): integer budget for fixed-budget thinking. `0` disables. Default `31999`. Honored on Sonnet 3.7 / 4.x and Opus 4.6; ignored on Opus 4.7 (adaptive-only).
+- **`CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1`**: reverts to fixed budget on 4.6 models; no-op on 4.7.
+- In-prompt keyword tiers on pre-4.7 models (CLI lexical scan, community-documented): `think` → ~4k, `megathink` → ~10k, `ultrathink` → ~31999. On Opus 4.7 these collapse to one-turn effort hints.
+- Underlying Messages API knobs: `thinking: { type: "enabled", budget_tokens: N }` (deprecated on 4.6, rejected on 4.7) or `thinking: { type: "adaptive" }` (current); plus `output_config: { effort: <level> }` (current). `budget_tokens` minimum `1024`, must be `< max_tokens`.
+- Gating: thinking-capable models only — Sonnet 3.7+, Sonnet 4.x, Opus 4.x, Haiku 4.x where applicable. Non-thinking models ignore both fields.
+- Default with no config: adaptive thinking enabled on supported models; Opus 4.7 defaults to effort `xhigh`. `showThinkingSummaries` is `false` by default in recent CLI versions.
+
+#### Codex (`@openai/codex-sdk` + `codex` CLI)
+
+- Canonical knob: `model_reasoning_effort` — values `none | minimal | low | medium | high | xhigh`. Default `medium`.
+- Passed via `-c model_reasoning_effort="high"` (CLI) or `config: { model_reasoning_effort: "..." }` (SDK). NOT a typed `ThreadOptions` field and NOT an env var. Persistent form is `config.toml` profiles.
+- Related orthogonal knobs in the same `config` map: `model_reasoning_summary` (`auto | concise | detailed | none`, default `auto`), `model_verbosity` (`low | medium | high`, default `medium`, Responses API only), `show_raw_agent_reasoning` (boolean — currently pinned `false` in `src/providers/codex-adapter.ts:353`; orthogonal to effort).
+- Per-model gating (empirically validated):
+  - `gpt-5-codex`, `gpt-5.1-codex`, `gpt-5.1-codex-mini` — `low | medium | high` only; reject `minimal`.
+  - `gpt-5.1-codex-max` — adds `xhigh`.
+  - `gpt-5.1` (non-codex) — accepts `none` plus standard tiers.
+  - Sending an invalid level fails the API call.
+- `Thread.resume` persists the last `reasoning_effort` per thread; supplying `config.model_reasoning_effort` (or top-level `model`/`modelProvider`) disables the persisted fallback.
+
+#### Pi (`@mariozechner/pi-coding-agent` / `pi-mono`)
+
+- Normalized `thinkingLevel` on `SessionConfig` (the option flowing into `createAgentSession`). Values: `off | minimal | low | medium | high | xhigh`, plus `max` for Claude 4.6+.
+- Separate `thinkingBudgets` map keys each level to a token budget (defaults from docs: `minimal=1024`, `low=4096`, `medium=10240`, `high=32768`). Honored by token-budget-native providers (Anthropic, OpenAI); qualitative pass-through for OpenRouter, xAI, Mistral, vLLM.
+- `defaultThinkingLevel` sets the initial value; unknown/new models reset to `off` (issue badlogic/pi-mono#1789).
+- For OpenRouter routes pi-mono normalizes `thinkingLevel` to OpenRouter's `reasoning: { effort: <level> }`. The OpenRouter `reasoning` object accepts `{ effort, max_tokens, exclude, enabled }`; `effort` and `max_tokens` are mutually exclusive.
+- Reasoning capability per model is declared in pi-mono's model registry — non-reasoning models ignore the level.
+- The exact placement of `thinkingLevel` in the `createAgentSession` argument (top-level vs nested under `sessionConfig`) should be confirmed against the installed `@mariozechner/pi-coding-agent` `.d.ts` before wiring it through `src/providers/pi-mono-adapter.ts:712`.
+
+#### Opencode (`sst/opencode`)
+
+- No unified reasoning key. Reasoning lives provider-gated under `provider.<id>.models.<model>.options` in `opencode.json` / `opencode.jsonc`, and the adapter must emit the right shape per provider:
+  - OpenAI / Azure / OpenAI-compatible: `options.reasoningEffort: "none | minimal | low | medium | high | xhigh"` (plus `textVerbosity`, `reasoningSummary`).
+  - Anthropic: `options.thinking: { type: "enabled", budgetTokens: N }` (min `1024`); some entries also accept `type: "adaptive"`.
+  - OpenRouter: `options.reasoning: { effort | max_tokens, exclude, enabled }` (pass-through; same constraints as direct OpenRouter).
+  - AWS Bedrock Anthropic: incomplete pass-through (sst/opencode#3428, sst/opencode#7357).
+- Built-in variants ship as preset `options` bundles: Anthropic exposes `high` and `max`; OpenAI reasoning models expose `none / minimal / low / medium / high / xhigh`. Selected per-invocation via `--variant <name>`; there is no `--reasoning-effort` CLI flag (open request anomalyco/opencode#14611).
+- Agent definitions accept the same `options` block, so reasoning can be pinned per-agent.
+- No reasoning is sent unless the user sets it; provider defaults apply (OpenAI reasoning models default to `medium`, Anthropic does not enable extended thinking without `thinking`).
+- For our adapter at `src/providers/opencode-adapter.ts:590`, a single normalized `reasoningEffort` field on the task config would need parsing of the model string (`anthropic/...` vs `openai/...` vs `openrouter/...`) to emit the correct provider-specific shape under `options`.
+
+#### Cross-harness normalization
+
+After the `/effort` finding, **all four harnesses now expose a qualitative effort level** as their primary user-facing knob. They diverge on the underlying transport and on the level vocabulary:
+
+| Harness | Primary level vocabulary | Transport to adapter | Numeric-budget escape hatch |
+|---|---|---|---|
+| Claude | `low \| medium \| high \| xhigh \| max` (+ `auto`) | env var `CLAUDE_CODE_EFFORT_LEVEL` | `MAX_THINKING_TOKENS` (env), legacy models only |
+| Codex | `none \| minimal \| low \| medium \| high \| xhigh` | SDK `config.model_reasoning_effort` (or `-c` CLI override) | n/a |
+| Pi | `off \| minimal \| low \| medium \| high \| xhigh \| max` | `SessionConfig.thinkingLevel` | `thinkingBudgets` map (provider-gated) |
+| Opencode | provider-gated — varies by provider, but each provider uses the same `low \| medium \| high \| xhigh`-ish vocabulary | per-task `opencode.json` under `provider.<id>.models.<model>.options.<reasoningEffort \| thinking \| reasoning>` | Anthropic `budgetTokens`, OpenRouter `max_tokens` |
+
+Shared safe subset: **`low | medium | high`** — accepted by all four on at least their default models.
+
+Restricted / gated levels: `minimal` (rejected by Codex `*-codex` models; not in Claude vocabulary); `xhigh` (Codex only on `gpt-5.1-codex-max`; Claude Opus 4.7-only; Pi/Opencode pass-through); `max` (Claude-only, persistence-buggy); `off`/`none` (semantics differ — Codex `none`, Pi `off`, Claude has no off, Opencode just omits).
+
+#### Implications for our runtime contract
+
+- A normalized `reasoning_effort` field on the runtime API body with closed enum `off | low | medium | high | xhigh` covers ~all real use cases. Adapter maps:
+  - Claude: set `CLAUDE_CODE_EFFORT_LEVEL` env in the spawn; map `off` → unset + `MAX_THINKING_TOKENS=0` on legacy models, or refuse with a clear error on Opus 4.7 (no off semantics).
+  - Codex: set `config.model_reasoning_effort` in the SDK config map; map `off` → `none`; refuse `minimal` (we're not exposing it); validate `xhigh` against model name.
+  - Pi: set `thinkingLevel` on the `createAgentSession` options; map `off` → `off`.
+  - Opencode: parse the model prefix, write the matching key under `provider.<id>.models.<model>.options` in the per-task config.
+- This lives in `ProviderSessionConfig` next to `model` — same lifecycle, same precedence, same telemetry path. Resolved order would mirror model: task field → agent `swarm_config` (`REASONING_EFFORT_OVERRIDE`) → adapter default.
+- Per-model gating belongs in the UI (greying out unsupported levels using a `supportsReasoning` / `reasoningLevels` field on `ModelOption`) plus a soft server-side validation that returns 400 on obviously invalid combos (e.g. `xhigh` on `gpt-5.1-codex` non-max).
+- Last-used effort belongs in `agents.cred_status.latestModel` alongside `model` — adapters already emit the requested level, we can echo it back.
+
 ### Dashboard Runtime UI
 
 - The agent detail route is mounted at `/agents/:id` in `ui/src/app/router.tsx:89`.
@@ -141,9 +221,12 @@ The UI model registry already covers the four local harnesses requested here (`c
 
 ## Open Questions
 
-- External provider documentation for current reasoning/effort knobs was not researched in this pass; findings here describe only the live repo state.
-- Current code does not encode which reasoning/effort levels are valid per harness or per model.
-- Current code does not show an existing persistence contract for custom reasoning/effort opt-in analogous to `allow_custom_model`.
+- Cross-harness shape mismatch: Claude is numeric-budget + adaptive, Codex/Pi are qualitative effort levels, Opencode is provider-gated pass-through. Open question: expose one normalized `effort` level cross-harness (with adapter-side translation, the way pi-mono does it internally) or surface per-harness raw knobs (Codex `model_reasoning_effort`, Claude `MAX_THINKING_TOKENS`, etc.). The normalized path is more user-friendly but loses Claude's numeric budgets and Opencode's per-provider keys.
+- Per-harness/per-model validity is non-trivial and provider-gated (e.g. Codex `*-codex` models reject `minimal`; `xhigh` only on `gpt-5.1-codex-max`; Anthropic `budget_tokens` min `1024`; OpenRouter `effort` vs `max_tokens` mutually exclusive). Open question: encode validation server-side at runtime-PATCH time, or pass-through and let the harness reject on first run.
+- No existing persistence contract for custom reasoning/effort opt-in analogous to `allow_custom_model`. Open question: do we need an `allow_custom_effort` flag, or is the closed set of normalized levels safe to expose without opt-in?
+- Default behavior: harnesses disagree on defaults (Claude → adaptive enabled; Codex → `medium`; Pi → `defaultThinkingLevel` setting, often `off`; Opencode → not sent at all). Open question: do we ship a single agent-swarm default (probably `medium`) or honor each harness's native default when the setting is unset.
+- Persistence shape: store as another scoped `swarm_config` key (e.g. `REASONING_EFFORT`) alongside `MODEL_OVERRIDE`, or extend `agents.cred_status.latestModel` to also carry the last-used effort.
+- Telemetry: `reasoningOutputTokens` / `thinkingTokens` already exist on cost types. Open question: is it worth recording the requested effort level alongside actual reasoning-token usage to validate that the level took effect.
 
 ## Appendix
 
