@@ -1036,12 +1036,24 @@ class CodexSession implements ProviderSession {
       // preserve. Wrapped in its own try/catch so summary failure must NOT
       // block the existing log/AGENTS.md cleanup below. Gate `SKIP_SESSION_SUMMARY=1`
       // matches the parity convention used by the claude Stop hook + pi/opencode.
-      if (process.env.SKIP_SESSION_SUMMARY !== "1") {
+      //
+      // Skip the summary entirely when the session was aborted. The transcript
+      // is incomplete, the LLM call would retry 3× through openrouter and
+      // spam stderr with structured-output failures (red-herring noise we
+      // saw in the templates-ui incident, 2026-05-28). Losing the summary
+      // on abort is acceptable — it's cleanup, not load-bearing.
+      const sessionWasAborted =
+        this.aborted ||
+        this.abortController?.signal.aborted === true ||
+        this.pendingResult?.exitCode === 130;
+      if (process.env.SKIP_SESSION_SUMMARY !== "1" && !sessionWasAborted) {
         try {
           await this.summarizeAtEnd();
         } catch (err) {
           console.error("session_summary failed (codex):", err);
         }
+      } else if (sessionWasAborted) {
+        console.debug("[codex] session aborted — skipping session_summary");
       }
 
       // Detach the abort controller now that the turn has settled.
