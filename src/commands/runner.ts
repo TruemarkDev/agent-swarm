@@ -3909,7 +3909,10 @@ export async function runAgent(config: RunnerConfig, opts: RunnerOptions) {
               logFile,
               systemPrompt: resolvedSystemPrompt,
               additionalArgs: opts.additionalArgs,
-              resumeSessionId: resumeResolution.resumeSessionId,
+              // Native resume deprecated: always undefined. Follow-up continuity flows through
+              // the context preamble injected above (see context-preamble.ts).
+              // resumeResolution is still computed for observability via logResumeResolution.
+              resumeSessionId: undefined,
               role,
               apiUrl,
               apiKey,
@@ -4207,7 +4210,9 @@ export async function runAgent(config: RunnerConfig, opts: RunnerOptions) {
               },
             ]);
             logResumeResolution(role, resumeResolution);
-            resumeSessionId = resumeResolution.resumeSessionId;
+            // Native resume deprecated: keep `resumeSessionId` undefined so a fresh
+            // session is spawned. Follow-up continuity flows via the context preamble
+            // injected above (see context-preamble.ts).
           } else {
             console.log(`[${role}] Child task — parent session ID not found, starting fresh`);
           }
