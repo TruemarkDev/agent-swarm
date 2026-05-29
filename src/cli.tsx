@@ -292,6 +292,27 @@ const COMMAND_HELP: Record<
       `  ${binName} claude-managed-setup --api-url https://swarm.example.com`,
     ].join("\n"),
   },
+  e2b: {
+    usage: `${binName} e2b <subcommand> [options]`,
+    description:
+      "Build Agent Swarm E2B templates and start API/worker sandboxes on demand for CI or Dockerless environments.",
+    options: [
+      "  build-template --role api|worker    Build or rebuild an E2B template",
+      "  delete-template <template...>        Delete E2B templates",
+      "  publish-template <template...>       Publish E2B templates",
+      "  unpublish-template <template...>     Make E2B templates private",
+      "  start-api --template <name>          Start the API in an E2B sandbox",
+      "  start-worker --api-url <url>         Start a worker against a public API URL",
+      "  start-stack                         Start API plus one or more workers",
+      "  list | kill <sandbox-id...>          Inspect or clean up sandboxes",
+      "  -h, --help                          Show this help",
+    ].join("\n"),
+    examples: [
+      `  ${binName} e2b build-template --role worker`,
+      `  ${binName} e2b start-worker --api-url https://swarm.example.com --api-key "$SWARM_API_KEY"`,
+      `  ${binName} e2b start-stack --workers 2 --api-key "$SWARM_API_KEY"`,
+    ].join("\n"),
+  },
 };
 
 function printHelp(command?: string) {
@@ -323,6 +344,7 @@ function printHelp(command?: string) {
     ["docs", "Open documentation (--open to launch in browser)"],
     ["codex-login", "Authenticate Codex via ChatGPT OAuth"],
     ["claude-managed-setup", "Bootstrap Anthropic Managed Agents (agent + env + skills)"],
+    ["e2b", "Build templates and start E2B API/worker sandboxes"],
     ["version", "Show version number"],
     ["help", "Show this help message"],
   ];
@@ -584,6 +606,10 @@ if (args.showHelp || args.command === "help" || args.command === undefined) {
   const { runClaudeManagedSetup } = await import("./commands/claude-managed-setup");
   const setupArgs = process.argv.slice(process.argv.indexOf("claude-managed-setup") + 1);
   await runClaudeManagedSetup(setupArgs);
+} else if (args.command === "e2b") {
+  const { runE2BCommand } = await import("./commands/e2b");
+  const e2bArgs = process.argv.slice(process.argv.indexOf("e2b") + 1);
+  await runE2BCommand(e2bArgs);
 } else {
   render(<App args={args} />);
 }
