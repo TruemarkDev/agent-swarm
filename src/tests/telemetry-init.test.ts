@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   _getInstallationIdForTests,
+  _isE2bSandbox,
   _resetTelemetryStateForTests,
   _resolveCloudMode,
   initTelemetry,
@@ -299,6 +300,91 @@ describe("initTelemetry", () => {
       expect(_resolveCloudMode("not a url")).toEqual({ isCloud: false });
       // Weird scheme with no host component
       expect(_resolveCloudMode("file:///tmp/foo")).toEqual({ isCloud: false });
+    });
+  });
+
+  describe("_isE2bSandbox detection", () => {
+    afterEach(() => {
+      delete process.env.E2B_SANDBOX_ID;
+    });
+
+    test("returns true when E2B_SANDBOX_ID is set", () => {
+      process.env.E2B_SANDBOX_ID = "sbx_abc123";
+      expect(_isE2bSandbox()).toBe(true);
+    });
+
+    test("returns false when E2B_SANDBOX_ID is unset", () => {
+      delete process.env.E2B_SANDBOX_ID;
+      expect(_isE2bSandbox()).toBe(false);
+    });
+
+    test("returns false when E2B_SANDBOX_ID is empty string", () => {
+      process.env.E2B_SANDBOX_ID = "";
+      expect(_isE2bSandbox()).toBe(false);
+    });
+  });
+
+  describe("track() ships is_e2b in properties", () => {
+    const originalFetch = globalThis.fetch;
+    let captured: Record<string, unknown> | null = null;
+
+    beforeEach(() => {
+      captured = null;
+      globalThis.fetch = (async (_url: string, init?: { body?: string }) => {
+        captured = init?.body ? JSON.parse(init.body) : null;
+        return new Response(null, { status: 204 });
+      }) as typeof fetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+      delete process.env.E2B_SANDBOX_ID;
+    });
+
+    test("properties.is_e2b=true when E2B_SANDBOX_ID is set at init", async () => {
+      process.env.E2B_SANDBOX_ID = "sbx_test123";
+      await initTelemetry(
+        "api-server",
+        async () => "install_e2b_test",
+        async () => {},
+      );
+
+      track({ event: "server.started", properties: { port: 3013 } });
+      await new Promise((r) => setTimeout(r, 0));
+
+      const properties = (captured as { properties: Record<string, unknown> }).properties;
+      expect(properties.is_e2b).toBe(true);
+      expect(properties.port).toBe(3013);
+    });
+
+    test("properties.is_e2b=false when E2B_SANDBOX_ID is unset at init", async () => {
+      delete process.env.E2B_SANDBOX_ID;
+      await initTelemetry(
+        "api-server",
+        async () => "install_no_e2b",
+        async () => {},
+      );
+
+      track({ event: "test.event", properties: {} });
+      await new Promise((r) => setTimeout(r, 0));
+
+      const properties = (captured as { properties: Record<string, unknown> }).properties;
+      expect(properties.is_e2b).toBe(false);
+    });
+
+    test("caller properties cannot override is_e2b", async () => {
+      process.env.E2B_SANDBOX_ID = "sbx_override_test";
+      await initTelemetry(
+        "api-server",
+        async () => "install_e2b_override",
+        async () => {},
+      );
+
+      track({ event: "test.event", properties: { is_e2b: false } });
+      await new Promise((r) => setTimeout(r, 0));
+
+      const properties = (captured as { properties: Record<string, unknown> }).properties;
+      expect(properties.is_e2b).toBe(true);
     });
   });
 
