@@ -255,11 +255,13 @@ describe("mergeMcpConfig (issue #369)", () => {
           url: "http://localhost:3013/mcp",
           headers: { Authorization: "Bearer KEY", "X-Agent-ID": "a1" },
         },
-        "context-mode": { command: "context-mode" },
+        "plugin_context-mode_context-mode": { command: "context-mode" },
       },
     };
     const merged = mergeMcpConfig(base, null, TASK_ID);
-    expect(merged.mcpServers["context-mode"]).toEqual({ command: "context-mode" });
+    expect(merged.mcpServers["plugin_context-mode_context-mode"]).toEqual({
+      command: "context-mode",
+    });
   });
 });
 
@@ -343,7 +345,7 @@ describe("createSessionMcpConfig", () => {
     expect(Object.keys(written.mcpServers).sort()).toEqual([
       "Datadog",
       "agent-swarm",
-      "context-mode",
+      "plugin_context-mode_context-mode",
     ]);
   });
 
@@ -445,7 +447,9 @@ describe("createSessionMcpConfig", () => {
 
       const path = await createSessionMcpConfig(cwd, "task-ctx-on");
       const written = await readWritten(path!);
-      expect(written.mcpServers["context-mode"]).toEqual({ command: "context-mode" });
+      expect(written.mcpServers["plugin_context-mode_context-mode"]).toEqual({
+        command: "context-mode",
+      });
       // Coexists with the swarm entry.
       expect(written.mcpServers["agent-swarm"]).toBeDefined();
     } finally {
@@ -475,7 +479,7 @@ describe("createSessionMcpConfig", () => {
 
       const path = await createSessionMcpConfig(cwd, "task-ctx-off");
       const written = await readWritten(path!);
-      expect(written.mcpServers["context-mode"]).toBeUndefined();
+      expect(written.mcpServers["plugin_context-mode_context-mode"]).toBeUndefined();
       // The swarm entry is still present.
       expect(written.mcpServers["agent-swarm"]).toBeDefined();
     } finally {

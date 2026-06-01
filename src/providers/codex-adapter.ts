@@ -82,6 +82,7 @@ import { credentialsToAuthJson } from "./codex-oauth/auth-json.js";
 import { getValidCodexOAuth } from "./codex-oauth/storage.js";
 import { resolveCodexPrompt } from "./codex-skill-resolver";
 import { createCodexSwarmEventHandler } from "./codex-swarm-events";
+import { CTX_MODE_NUDGE_EVERY } from "./ctx-mode-env";
 import { buildOtelTraceparentEnv } from "./otel-env";
 import type {
   CostData,
@@ -1265,6 +1266,7 @@ export async function createInProcessCodexSession(
       ...(process.env.NODE_EXTRA_CA_CERTS
         ? { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS }
         : {}),
+      CONTEXT_MODE_EXTERNAL_MCP_NUDGE_EVERY: CTX_MODE_NUDGE_EVERY,
       ...(config.env ?? {}),
       // Gated cross-service OTel linking: when SWARM_ENABLE_HARNESS_OTEL (or
       // the deprecated SWARM_ENABLE_CLAUDE_CODE_OTEL alias) is on, inject
@@ -1439,6 +1441,7 @@ class CodexSubprocessSession implements ProviderSession {
           ? { CODEX_PATH_OVERRIDE: process.env.CODEX_PATH_OVERRIDE }
           : {}),
         ...(process.env.CODEX_SKILLS_DIR ? { CODEX_SKILLS_DIR: process.env.CODEX_SKILLS_DIR } : {}),
+        CONTEXT_MODE_EXTERNAL_MCP_NUDGE_EVERY: CTX_MODE_NUDGE_EVERY,
         ...(process.env.SKIP_SESSION_SUMMARY
           ? { SKIP_SESSION_SUMMARY: process.env.SKIP_SESSION_SUMMARY }
           : {}),

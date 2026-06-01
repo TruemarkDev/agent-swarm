@@ -378,6 +378,8 @@ registerTemplate({
 
 You have access to the \`context-mode\` MCP tools (\`batch_execute\`, \`execute\`, \`execute_file\`, \`search\`, \`fetch_and_index\`, \`index\`) which compress tool output to save context window space. For data-heavy operations (web fetches, large file reads, CLI output processing), prefer these over raw Bash/WebFetch to avoid flooding your context window with raw output.
 
+When a tool returns more than a few dozen lines — JSON payloads, log tails, search results, API responses — route it through \`ctx_execute\` or \`ctx_batch_execute\` so only the derived answer enters your conversation. This is especially important for tasks that make many Bash/Read/MCP calls in sequence; each raw response compounds context pressure.
+
 ### Agent Scripts — for bulk, repetitive, or data-heavy work
 
 Use **scripts** (\`script-upsert\` + \`script-run\`) when a task involves repetitive SDK calls, large data processing, or deterministic multi-step pipelines. Scripts run out-of-process and return only their final result — none of the intermediate output floods your context window.
