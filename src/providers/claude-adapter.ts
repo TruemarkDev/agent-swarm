@@ -337,6 +337,30 @@ export function buildClaudeCodeOtelEnv(
 }
 
 /**
+ * Claude Code runtime defaults for ephemeral swarm harness sessions.
+ *
+ * These are plain subprocess env vars, not prompt content. They are injected
+ * after the resolved swarm config so the worker enforces the memory/privacy
+ * guardrails consistently per spawn. Statsig/DNT opt-out is intentionally
+ * separate from our Claude Code OTel export path, which is controlled by
+ * buildClaudeCodeOtelEnv.
+ */
+export function buildClaudeCodeRuntimeEnv(
+  _sourceEnv: Record<string, string | undefined>,
+): Record<string, string> {
+  return {
+    ENABLE_TOOL_SEARCH: "true",
+    CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING: "1",
+    CLAUDE_CODE_SKIP_PROMPT_HISTORY: "1",
+    CLAUDE_CODE_DISABLE_ATTACHMENTS: "1",
+    DISABLE_TELEMETRY: "1",
+    DO_NOT_TRACK: "1",
+    DISABLE_FEEDBACK_COMMAND: "1",
+    DISABLE_BUG_COMMAND: "1",
+  };
+}
+
+/**
  * Resolve the path at which the per-task system prompt is staged on disk.
  *
  * Pushing the prompt as `--append-system-prompt <value>` makes the entire
@@ -398,11 +422,13 @@ class ClaudeSession implements ProviderSession {
     // so the freshly-computed TRACEPARENT wins over any stale value the
     // container env might carry.
     const otelEnv = buildClaudeCodeOtelEnv(sourceEnv);
+    const runtimeEnv = buildClaudeCodeRuntimeEnv(sourceEnv);
     this.proc = Bun.spawn(cmd, {
       cwd: this.config.cwd,
       env: {
         ENABLE_PROMPT_CACHING_1H: "1",
         ...sourceEnv,
+        ...runtimeEnv,
         ...otelEnv,
         TASK_FILE: taskFilePath,
         // Belt-and-braces: TASK_FILE on disk can disappear mid-session (race
