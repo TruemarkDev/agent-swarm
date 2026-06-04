@@ -33,6 +33,7 @@ import memoryDedupCheckSrc from "./catalog/memory-dedup-check.ts" with { type: "
 import scheduleHealthSrc from "./catalog/schedule-health.ts" with { type: "text" };
 import slackThreadFlattenSrc from "./catalog/slack-thread-flatten.ts" with { type: "text" };
 import smartRecallSrc from "./catalog/smart-recall.ts" with { type: "text" };
+import taskContextGatheringSrc from "./catalog/task-context-gathering.ts" with { type: "text" };
 import taskFailureAuditSrc from "./catalog/task-failure-audit.ts" with { type: "text" };
 import textDiffSrc from "./catalog/text-diff.ts" with { type: "text" };
 import toolUsageSrc from "./catalog/tool-usage.ts" with { type: "text" };
@@ -133,6 +134,14 @@ export const SEED_SCRIPTS: SeedScript[] = [
     intent:
       "Recall relevant memories using multiple search angles — better coverage than a single query. Use for task onboarding, context gathering, or before writing new memories.",
     source: asText(smartRecallSrc),
+  },
+  {
+    name: "task-context-gathering",
+    description:
+      "Get task details and recall relevant memories in one call — returns a slimmed task projection plus deduped and reranked memories from multi-query fan-out.",
+    intent:
+      "Task onboarding: one call instead of task_get plus multiple memory_search calls. Pass the task description split into 2-4 natural-language queries.",
+    source: asText(taskContextGatheringSrc),
   },
   {
     name: "schedule-health",
