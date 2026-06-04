@@ -30,6 +30,7 @@ import groupCountSrc from "./catalog/group-count.ts" with { type: "text" };
 import jsonQuerySrc from "./catalog/json-query.ts" with { type: "text" };
 import linearIssueSrc from "./catalog/linear-issue.ts" with { type: "text" };
 import memoryDedupCheckSrc from "./catalog/memory-dedup-check.ts" with { type: "text" };
+import opsCatalogAuditSrc from "./catalog/ops-catalog-audit.ts" with { type: "text" };
 import scheduleHealthSrc from "./catalog/schedule-health.ts" with { type: "text" };
 import slackThreadFlattenSrc from "./catalog/slack-thread-flatten.ts" with { type: "text" };
 import smartRecallSrc from "./catalog/smart-recall.ts" with { type: "text" };
@@ -166,6 +167,14 @@ export const SEED_SCRIPTS: SeedScript[] = [
     intent:
       "Single-call daily compounding Phase 0 helper — replaces ~25 raw tool roundtrips with one compressed JSON result covering every agent. For daily evolution, self-scripting candidates, ops reviews, or heartbeat context.",
     source: asText(compoundInsightsSrc),
+  },
+  {
+    name: "ops-catalog-audit",
+    description:
+      "Audit-as-code catalog check for schedules, workflows, and prompt/template drift. Clusters actionable findings by goal and can publish an authed HTML report page.",
+    intent:
+      "Re-run the ops inventory audit in one call: duplicate/dead schedules, code-work routing risks, enabled workflow fixtures, structured-output gate gaps, prompt registry drift, stale hosts, and systemDefault skill duplicates.",
+    source: asText(opsCatalogAuditSrc),
   },
 ];
 
