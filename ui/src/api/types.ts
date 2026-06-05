@@ -952,12 +952,16 @@ export type ScriptRunStatus =
   | "cancelled"
   | "aborted_limit";
 
+// `workflow` = durable background run (has a journal). `inline` = synchronous one-off run.
+export type ScriptRunKind = "workflow" | "inline";
+
 export interface ScriptRun {
   id: string;
   agentId: string;
   scriptName?: string;
   source: string;
   args?: unknown;
+  kind: ScriptRunKind;
   status: ScriptRunStatus;
   pid?: number;
   startedAt: string;
@@ -982,6 +986,12 @@ export interface ScriptRunJournalEntry {
   error?: string;
   startedAt: string;
   completedAt?: string;
+  /**
+   * Real wall-clock duration of the step in milliseconds, measured in the
+   * subprocess around the step's execution. Absent on runs recorded before
+   * per-step timing was added (the waterfall falls back to sequence mode).
+   */
+  durationMs?: number;
 }
 
 export interface ScriptRunsResponse {
