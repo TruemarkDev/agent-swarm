@@ -20,6 +20,10 @@ export const argsSchema = z.object({
     .positive()
     .optional()
     .describe("Window around now for merged agent-swarm PRs (default 15)"),
+  repo: z
+    .string()
+    .optional()
+    .describe("Optional GitHub repository in 'owner/name' form for restart/deploy PR detection"),
 });
 
 const BENIGN_FAILURE_RE = /^(superseded_workflow_task|cancelled|reboot-sweep)$/i;
@@ -60,11 +64,21 @@ function summarizeTask(row: any): any {
   };
 }
 
-async function recentMergedPrs(ctx: any, nowMs: number, windowMinutes: number): Promise<any> {
+async function recentMergedPrs(
+  ctx: any,
+  repo: string | undefined,
+  nowMs: number,
+  windowMinutes: number,
+): Promise<any> {
+  if (!repo) return { skipped: "repo not provided" };
+  if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) return { error: "repo must be in 'owner/name' form" };
+
   const windowMs = windowMinutes * 60 * 1000;
   try {
     const response = await ctx.stdlib.fetch(
-      "https://api.github.com/repos/desplega-ai/agent-swarm/pulls?state=closed&sort=updated&direction=desc&per_page=20",
+      "https://api.github.com/repos/" +
+        repo +
+        "/pulls?state=closed&sort=updated&direction=desc&per_page=20",
       {
         headers: {
           Accept: "application/vnd.github+json",
@@ -79,7 +93,7 @@ async function recentMergedPrs(ctx: any, nowMs: number, windowMinutes: number): 
       .map((pr) => {
         const mergedAtMs = Date.parse(pr.merged_at);
         return {
-          repo: "desplega-ai/agent-swarm",
+          repo,
           number: pr.number,
           title: pr.title,
           url: pr.html_url,
@@ -103,8 +117,9 @@ export default async function bootTriage(args: any, ctx: any) {
   const failureLookbackMinutes = parsed.data.failureLookbackMinutes || 60;
   const stuckMinutes = parsed.data.stuckMinutes || 5;
   const deployWindowMinutes = parsed.data.deployWindowMinutes || 15;
+  const repo = parsed.data.repo;
 
-  const mergedPrs = await recentMergedPrs(ctx, nowMs, deployWindowMinutes);
+  const mergedPrs = await recentMergedPrs(ctx, repo, nowMs, deployWindowMinutes);
 
   const recentFailureRows = await query(
     ctx,
@@ -186,8 +201,9 @@ export default async function bootTriage(args: any, ctx: any) {
       deployWindowMinutes,
     },
     deployRestartDetection: {
-      source: "github:desplega-ai/agent-swarm",
+      source: repo ? "github:" + repo : null,
       mergedPrsWithinWindow: Array.isArray(mergedPrs) ? mergedPrs : [],
+      skipped: Array.isArray(mergedPrs) ? null : mergedPrs.skipped || null,
       error: Array.isArray(mergedPrs) ? null : mergedPrs.error,
     },
     recentlyFailedTasks,

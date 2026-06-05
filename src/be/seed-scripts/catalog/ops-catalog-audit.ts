@@ -27,7 +27,7 @@ export const argsSchema = z.object({
 const CODE_WORK_RE =
   /\b(git|github|gh\b|gh-cli|docker|docker-compose|bun|npm|pnpm|yarn|tsc|eslint|lint|test|pr\b|pull request|branch|commit|repo|worktree|typescript|javascript)\b/i;
 const CODE_AGENT_RE =
-  /\b(code|coder|coding|implement|implementation|engineer|software|typescript|javascript|repo|github|picateclas)\b/i;
+  /\b(code|coder|coding|implement|implementation|engineer|software|typescript|javascript|repo|github)\b/i;
 const NON_CODE_AGENT_RE = /\b(content|reviewer|research|sales|gtm|support|ops|lead)\b/i;
 const SMOKE_WORKFLOW_RE =
   /\b(smoke|demo|litmus-smoke|one[- ]shot|validation|des-462-gate-validation|gsc-runtime-smoke)\b/i;

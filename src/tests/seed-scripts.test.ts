@@ -496,7 +496,7 @@ describe("seed-scripts catalog", () => {
   test("boot-triage returns one read-only post-restart snapshot", async () => {
     const queries: Array<{ sql: string; params?: unknown[] }> = [];
     const result: any = await bootTriage(
-      { nowIso: "2026-06-05T10:15:00.000Z" },
+      { nowIso: "2026-06-05T10:15:00.000Z", repo: "owner/repo" },
       {
         stdlib: {
           fetch: async () =>
