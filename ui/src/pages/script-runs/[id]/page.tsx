@@ -2,6 +2,7 @@ import { ArrowLeft, Check, Copy, RefreshCw } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useScriptRun } from "@/api/hooks/use-script-runs";
+import { useScripts } from "@/api/hooks/use-scripts";
 import type { ScriptRunJournalEntry } from "@/api/types";
 import {
   mapStepsToBlocks,
@@ -93,6 +94,15 @@ export default function ScriptRunDetailPage() {
   const run = data?.run;
   const journal = useMemo(() => data?.journal ?? [], [data]);
 
+  // Run → Script backlink: runs reference scripts by name (no FK), so resolve
+  // the saved script's id from the catalog (scratch included — inline runs
+  // auto-save scratch scripts). Unresolved names (deleted script) fall back to
+  // a pre-filtered /scripts search link.
+  const { data: scripts } = useScripts({ includeScratch: true });
+  const linkedScriptId = run?.scriptName
+    ? scripts?.find((s) => s.name === run.scriptName)?.id
+    : undefined;
+
   const counts = useMemo(() => stepCounts(journal), [journal]);
   const blocks = useMemo(() => (run?.source ? parseStepBlocks(run.source) : []), [run?.source]);
   const anchors = useMemo(
@@ -139,7 +149,7 @@ export default function ScriptRunDetailPage() {
     <div className="flex-1 min-h-0 space-y-4 overflow-y-auto">
       <div className="space-y-3">
         <Link
-          to="/script-runs"
+          to="/scripts?tab=runs"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Script Runs
@@ -182,6 +192,20 @@ export default function ScriptRunDetailPage() {
         <Fact label="Agent">
           <AgentLink agentId={run.agentId} />
         </Fact>
+        {run.scriptName && (
+          <Fact label="Script">
+            <Link
+              to={
+                linkedScriptId
+                  ? `/scripts/${linkedScriptId}`
+                  : `/scripts?tab=scripts&search=${encodeURIComponent(run.scriptName)}`
+              }
+              className="text-xs text-foreground underline-offset-2 transition-colors hover:underline"
+            >
+              {run.scriptName}
+            </Link>
+          </Fact>
+        )}
         <Fact label="Started">
           <span className="font-mono text-xs">{formatSmartTime(run.startedAt)}</span>
         </Fact>
