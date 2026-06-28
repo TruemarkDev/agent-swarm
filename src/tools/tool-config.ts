@@ -72,6 +72,9 @@ export const DEFERRED_TOOLS = new Set([
   "list-config",
   "delete-config",
 
+  // Memory (1)
+  "memory-edit",
+
   // Repos (2)
   "get-repos",
   "update-repo",
